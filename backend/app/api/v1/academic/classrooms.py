@@ -1,0 +1,577 @@
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+from pydantic import BaseModel
+import datetime
+import os
+import json
+import shutil
+from groq import Groq
+
+from app.models.ai import ResourceChunk, AIJobStatus
+from app.services.ai_pipeline import get_embedding_model
+from app.services.observability import log_ai_request
+
+from app.api.ws.classroom import manager
+
+from app.api.dependencies import get_db, get_current_user
+from app.models.user import User
+from app.models.academic import Course, Department
+from app.models.activity import Classroom, LectureSession, Attendance, Doubt, TranscriptRecord
+
+router = APIRouter()
+
+class ClassroomCreate(BaseModel):
+    name: str
+    code: str
+
+class ClassroomResponse(BaseModel):
+    id: int
+    course_id: int
+    teacher_id: int
+    status: str
+    active_students_count: int = 0
+    is_live: bool = False
+    name: Optional[str] = None
+    code: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+@router.post("", response_model=ClassroomResponse)
+def create_classroom(
+    room_in: ClassroomCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role.name not in ["Teacher", "College Admin", "Super Admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized to create classes")
+        
+    from app.models.academic import Department, Program, Semester, Section, Course
+    
+    # 1. Department
+    mock_dept = db.query(Department).first()
+    if not mock_dept:
+        mock_dept = Department(college_id=current_user.college_id or 1, name="General Dept", code="GEN")
+        db.add(mock_dept)
+        db.commit()
+        db.refresh(mock_dept)
+        
+    # 2. Program
+    mock_program = db.query(Program).first()
+    if not mock_program:
+        mock_program = Program(department_id=mock_dept.id, name="General Program", degree_level="Bachelors")
+        db.add(mock_program)
+        db.commit()
+        db.refresh(mock_program)
+        
+    # 3. Semester
+    mock_semester = db.query(Semester).first()
+    if not mock_semester:
+        mock_semester = Semester(program_id=mock_program.id, term_name="Semester 1")
+        db.add(mock_semester)
+        db.commit()
+        db.refresh(mock_semester)
+        
+    # 4. Section
+    mock_section = db.query(Section).first()
+    if not mock_section:
+        mock_section = Section(semester_id=mock_semester.id, name="A")
+        db.add(mock_section)
+        db.commit()
+        db.refresh(mock_section)
+        
+    # 5. Create a specific Course for this classroom
+    mock_course = Course(
+        section_id=mock_section.id,
+        name=room_in.name,
+        code=room_in.code,
+        credits=3
+    )
+    db.add(mock_course)
+    db.commit()
+    db.refresh(mock_course)
+        
+    new_room = Classroom(
+        college_id=current_user.college_id or 1,
+        course_id=mock_course.id,
+        teacher_id=current_user.id,
+        status="scheduled"
+    )
+    db.add(new_room)
+    db.commit()
+    db.refresh(new_room)
+    
+    return {
+        "id": new_room.id,
+        "course_id": new_room.course_id,
+        "teacher_id": new_room.teacher_id,
+        "status": new_room.status,
+        "active_students_count": 0,
+        "is_live": False,
+        "name": room_in.name,
+        "code": room_in.code
+    }
+
+class LiveUpdateStatus(BaseModel):
+    is_live: bool
+
+def process_end_of_class(db: Session, classroom_code: str):
+    # Retrieve all transcripts for this classroom in the past X hours to form context
+    # Since we use mock classrooms, we will just grab the latest transcripts
+    transcripts = db.query(TranscriptRecord).order_by(TranscriptRecord.id.desc()).limit(100).all()
+    transcripts.reverse()
+    transcript_text = "\n".join([f"{t.speaker_name}: {t.text}" for t in transcripts])
+    
+    if not transcript_text.strip():
+        return # Nothing to summarize
+        
+    try:
+        from groq import Groq
+        import time
+        from app.core.config import settings
+        client = Groq(api_key=settings.GROQ_API_KEY)
+        system_prompt = (
+            "You are an academic AI. Based on the following live transcript, "
+            "generate an Executive Summary, Key Concepts, and 3 Quiz questions. "
+            "Return the result in Markdown format."
+        )
+        
+        start_time = time.time()
+        completion = client.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": transcript_text}
+            ],
+            temperature=0.5,
+            max_completion_tokens=2048,
+        )
+        latency_ms = (time.time() - start_time) * 1000
+        
+        summary = completion.choices[0].message.content
+        
+        log_ai_request(
+            db=db,
+            college_id=1, # Mock for background task
+            user_id=1,
+            model="openai/gpt-oss-120b",
+            endpoint="summary",
+            latency_ms=latency_ms,
+            prompt_tokens=completion.usage.prompt_tokens,
+            completion_tokens=completion.usage.completion_tokens,
+            total_tokens=completion.usage.total_tokens
+        )
+        
+        from app.models.activity import LectureSummary, Classroom
+        from app.services.ai_pipeline import process_summary_background
+        
+        classroom = db.query(Classroom).filter(Classroom.code == classroom_code).first()
+        if classroom:
+            new_summary = LectureSummary(
+                classroom_id=classroom.id,
+                summary_text=summary,
+                created_at=datetime.datetime.now().isoformat()
+            )
+            db.add(new_summary)
+            db.commit()
+            db.refresh(new_summary)
+            
+            process_summary_background(db, new_summary.id)
+            
+        print(f"End of Class Summary for {classroom_code}:\n", summary)
+    except Exception as e:
+        print("End of Class AI processing failed:", e)
+
+@router.put("/{code}/live")
+def update_live_status(
+    code: str,
+    status_update: LiveUpdateStatus,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.academic import Course
+    classroom = db.query(Classroom).join(Course).filter(Course.code == code).first()
+    if not classroom:
+        raise HTTPException(status_code=404, detail="Classroom not found")
+        
+    if current_user.role and current_user.role.name not in ["Teacher", "College Admin", "Super Admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    new_status = "live" if status_update.is_live else "scheduled"
+    classroom.status = new_status
+    db.commit()
+    
+    # If the class just ended, queue the background processing
+    if not status_update.is_live:
+        background_tasks.add_task(process_end_of_class, db, code)
+        
+    return {"status": "success", "is_live": status_update.is_live}
+
+@router.get("", response_model=List[ClassroomResponse])
+def get_classrooms(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # For now, return all classrooms for the user's college
+    if current_user.role.name in ["Teacher", "College Admin"]:
+        classrooms = db.query(Classroom).filter(Classroom.college_id == current_user.college_id).all()
+    elif current_user.role.name == "Student":
+        all_col_classrooms = db.query(Classroom).filter(Classroom.college_id == current_user.college_id).all()
+        classrooms = []
+        for c in all_col_classrooms:
+            course_code = c.course.code if c.course else None
+            if not course_code or course_code == "All Sections" or course_code == current_user.section:
+                classrooms.append(c)
+    else:
+        classrooms = db.query(Classroom).all()
+        
+    results = []
+    for c in classrooms:
+        # Calculate joined students from Attendance of the most recent lecture
+        latest_lecture = db.query(LectureSession).filter(LectureSession.classroom_id == c.id).order_by(LectureSession.id.desc()).first()
+        student_count = 0
+        if latest_lecture:
+            student_count = db.query(Attendance).filter(Attendance.lecture_id == latest_lecture.id).count()
+            
+        results.append({
+            "id": c.id,
+            "course_id": c.course_id,
+            "teacher_id": c.teacher_id,
+            "status": c.status,
+            "active_students_count": student_count,
+            "is_live": c.status == "live",
+            "name": c.course.name if c.course else f"Class {c.id}",
+            "code": c.course.code if c.course else f"C{c.id}"
+        })
+    return results
+
+@router.delete("/{code}")
+def delete_classroom(
+    code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.academic import Course
+    if current_user.role.name not in ["Teacher", "College Admin", "Super Admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized to delete classes")
+        
+    classroom = db.query(Classroom).join(Course).filter(Course.code == code).first()
+    if not classroom:
+        raise HTTPException(status_code=404, detail="Classroom not found")
+        
+    # Manually delete related records to avoid FK constraint errors
+    db.query(Doubt).filter(Doubt.classroom_id == classroom.id).delete()
+    db.query(TranscriptRecord).filter(TranscriptRecord.classroom_id == classroom.id).delete()
+    
+    sessions = db.query(LectureSession).filter(LectureSession.classroom_id == classroom.id).all()
+    for session in sessions:
+        db.query(Attendance).filter(Attendance.lecture_id == session.id).delete()
+        db.delete(session)
+        
+    db.delete(classroom)
+    db.commit()
+    
+    return {"status": "success"}
+
+@router.get("/{code}/attendance")
+def get_attendance(
+    code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Mocking fetching classroom by code since code is usually on Course
+    # We will just fetch all attendance for the user's college for simplicity in this demo
+    attendances = db.query(Attendance).join(User).filter(User.college_id == current_user.college_id).all()
+    results = []
+    for a in attendances:
+        results.append({
+            "id": a.id,
+            "student_name": a.student.full_name,
+            "status": a.status,
+            "engagement_score": a.engagement_score
+        })
+    return results
+
+@router.get("/{code}/records")
+def get_records(
+    code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Fetch transcripts for the classroom
+    records = db.query(TranscriptRecord).all()
+    results = []
+    for r in records:
+        results.append({
+            "id": r.id,
+            "text": r.text,
+            "speaker_name": r.speaker_name,
+            "timestamp": r.timestamp
+        })
+    return results
+
+@router.post("/{code}/transcribe")
+async def transcribe_audio(
+    code: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role and current_user.role.name != "Teacher":
+        raise HTTPException(status_code=403, detail="Only teachers can stream transcripts")
+
+    temp_filename = f"temp_audio_{int(time.time())}.webm"
+    with open(temp_filename, "wb") as f:
+        f.write(await file.read())
+
+    try:
+        start_time = time.time()
+        from app.core.config import settings
+        client = Groq(api_key=settings.GROQ_API_KEY)
+        
+        with open(temp_filename, "rb") as audio_file:
+            transcription = client.audio.transcriptions.create(
+                file=(temp_filename, audio_file.read()),
+                model="whisper-large-v3-turbo",
+                temperature=0,
+                response_format="verbose_json",
+            )
+            text = transcription.text
+            
+        latency = int((time.time() - start_time) * 1000)
+
+        if text and text.strip():
+            # Broadcast the transcript segment via websocket manager
+            payload = {
+                "type": "transcript_segment",
+                "text": text,
+                "timestamp": datetime.datetime.now().isoformat(),
+                "latency_ms": latency,
+                "confidence": 0.98 # Groq verbose_json doesn't give a single confidence easily without parsing segments, mock it for now
+            }
+            await manager.broadcast(json.dumps(payload), code)
+            
+            # Save to DB
+            classroom = db.query(Classroom).filter(Classroom.code == code).first()
+            if classroom:
+                new_record = TranscriptRecord(
+                    classroom_id=classroom.id,
+                    speaker_name=current_user.full_name,
+                    text=text,
+                    timestamp=datetime.datetime.now().isoformat()
+                )
+                db.add(new_record)
+                db.commit()
+                db.refresh(new_record)
+                
+                from app.services.ai_pipeline import process_transcript_background
+                process_transcript_background(db, new_record.id)
+
+        return {"status": "success", "text": text}
+
+    except Exception as e:
+        print(f"Groq Transcription Error: {e}")
+        raise HTTPException(status_code=500, detail="Transcription failed")
+    finally:
+        if os.path.exists(temp_filename):
+            os.remove(temp_filename)
+
+@router.get("/{code}/doubts")
+def get_classroom_doubts(
+    code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.academic import Course
+    classroom = db.query(Classroom).join(Course).filter(Course.code == code).first()
+    if not classroom:
+        return []
+        
+    doubts = db.query(Doubt).filter(Doubt.classroom_id == classroom.id).order_by(Doubt.id.desc()).limit(50).all()
+    results = []
+    for d in doubts:
+        student_name = d.student.full_name if d.student else "Unknown"
+        results.append({
+            "id": d.id,
+            "question": d.question,
+            "student_name": student_name if not d.is_anonymous else "Anonymous",
+            "real_name": student_name,
+            "is_anonymous": bool(d.is_anonymous),
+            "timestamp": d.timestamp,
+            "ai_answer": d.ai_answer
+        })
+    return results
+
+class DoubtAnswerRequest(BaseModel):
+    model: str = "openai/gpt-oss-120b"
+    fallback_question: str = ""
+
+@router.post("/{code}/doubts/{doubt_id}/answer")
+async def answer_doubt(
+    code: str,
+    doubt_id: str,
+    req: DoubtAnswerRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role and current_user.role.name != "Teacher":
+        raise HTTPException(status_code=403, detail="Only teachers can trigger AI answers")
+
+    # Try to find the doubt, but gracefully fallback if the ID is invalid (e.g. float timestamp)
+    doubt = None
+    try:
+        real_doubt_id = int(float(doubt_id))
+        doubt = db.query(Doubt).filter(Doubt.id == real_doubt_id).first()
+    except (ValueError, TypeError):
+        pass
+
+    question_text = doubt.question if doubt else req.fallback_question
+    if not question_text:
+        raise HTTPException(status_code=404, detail="Doubt not found and no fallback question provided.")
+
+    try:
+        # Note: Actual vector search requires pgvector extension which is blocked in this environment
+        # We simulate finding context
+        context_text = ""
+        embedding_model = get_embedding_model()
+        if embedding_model:
+            from app.models.ai import ResourceChunk, TranscriptChunk, SummaryChunk
+            query_embedding = embedding_model.encode(doubt.question).tolist()
+            
+            res_results = db.query(ResourceChunk).order_by(
+                ResourceChunk.embedding.cosine_distance(query_embedding)
+            ).limit(2).all()
+            
+            tr_results = db.query(TranscriptChunk).order_by(
+                TranscriptChunk.embedding.cosine_distance(query_embedding)
+            ).limit(2).all()
+            
+            sum_results = db.query(SummaryChunk).order_by(
+                SummaryChunk.embedding.cosine_distance(query_embedding)
+            ).limit(2).all()
+            
+            all_chunks = [r.chunk_text for r in res_results] + \
+                         [r.chunk_text for r in tr_results] + \
+                         [r.chunk_text for r in sum_results]
+            
+            if all_chunks:
+                context_text = "\n\n".join(all_chunks)
+
+        system_prompt = (
+            "You are a helpful academic AI assistant in a classroom. "
+            "Provide a concise, clear, and encouraging answer to the student's question. "
+        )
+        if context_text:
+            system_prompt += (
+                "Use ONLY the following context to answer the question. "
+                "If the context does not contain the answer, state that you do not know.\n\n"
+                f"Context:\n{context_text}"
+            )
+            
+        from app.core.config import settings
+        client = Groq(api_key=settings.GROQ_API_KEY)
+        
+        start_time = time.time()
+        completion = client.chat.completions.create(
+            model=req.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": question_text
+                }
+            ],
+            temperature=1,
+            max_completion_tokens=2048,
+            top_p=1,
+            stream=False # Disable streaming temporarily to easily get usage tokens
+        )
+
+        latency_ms = (time.time() - start_time) * 1000
+        full_answer = completion.choices[0].message.content
+        
+        log_ai_request(
+            db=db,
+            college_id=current_user.college_id,
+            user_id=current_user.id,
+            model=req.model,
+            endpoint="doubt_answer",
+            latency_ms=latency_ms,
+            prompt_tokens=completion.usage.prompt_tokens,
+            completion_tokens=completion.usage.completion_tokens,
+            total_tokens=completion.usage.total_tokens
+        )
+            
+        if doubt:
+            doubt.ai_answer = full_answer
+            db.commit()
+
+        # Broadcast the answer
+        payload = {
+            "type": "doubt_answered",
+            "doubt_id": doubt_id,
+            "ai_answer": full_answer
+        }
+        await manager.broadcast(json.dumps(payload), code)
+
+        return {"status": "success", "answer": full_answer}
+
+    except Exception as e:
+        print(f"Groq AI Answer Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate AI answer")
+
+class ChatRequest(BaseModel):
+    message: str
+    model: str = "openai/gpt-oss-120b"
+
+@router.post("/{code}/chat")
+async def chat_classroom(
+    code: str,
+    req: ChatRequest,
+    current_user: User = Depends(get_current_user)
+):
+    from fastapi.responses import StreamingResponse
+    from groq import Groq
+    from app.core.config import settings
+    import json
+    
+    client = Groq(api_key=settings.GROQ_API_KEY)
+    
+    # We use the specific model the user requested
+    try:
+        completion = client.chat.completions.create(
+            model=req.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful AI Classroom Assistant. You provide concise, clear answers to students and teachers during a live lecture. Always respond with a short summary followed by a brief, practical example. Do not write long essays."
+                },
+                {
+                    "role": "user",
+                    "content": req.message
+                }
+            ],
+            temperature=1,
+            max_completion_tokens=2048,
+            top_p=1,
+            stream=True,
+            stop=None
+        )
+
+        def stream_generator():
+            for chunk in completion:
+                content = chunk.choices[0].delta.content or ""
+                if content:
+                    yield f"data: {json.dumps({'content': content})}\n\n"
+            yield "data: [DONE]\n\n"
+            
+        return StreamingResponse(stream_generator(), media_type="text/event-stream")
+    except Exception as e:
+        print(f"Groq Chat Error: {e}")
+        raise HTTPException(status_code=500, detail="Chat generation failed")

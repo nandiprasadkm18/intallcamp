@@ -12,7 +12,7 @@
   --color-brand-emerald: #10b981;
   --color-brand-amber: #f59e0b;
   --color-brand-slate: #94a3b8;
-  
+
   --shadow-glow-indigo: 0 0 15px rgba(79, 70, 229, 0.15);
   --shadow-glow-emerald: 0 0 15px rgba(16, 185, 129, 0.15);
 }
@@ -27,9 +27,11 @@
     width: 6px;
     height: 6px;
   }
+
   ::-webkit-scrollbar-track {
     @apply bg-white;
   }
+
   ::-webkit-scrollbar-thumb {
     @apply bg-white rounded-full hover:bg-gray-100 transition-colors;
   }
@@ -48,5 +50,11 @@
 .grid-overlay {
   background-size: 40px 40px;
   background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-                    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+}
+
+/* Hide default browser password reveal icons */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
 }

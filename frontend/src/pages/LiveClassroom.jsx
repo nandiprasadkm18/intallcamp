@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useClassroom } from '../contexts/ClassroomContext';
 import { 
@@ -39,13 +40,46 @@ const LiveClassroom = ({ setCurrentPage }) => {
     askAnonymousDoubt,
     triggerLiveTranscriptLine,
     broadcastAlert,
-    sentiment
+    sentiment,
+    startAudioStream,
+    stopAudioStream,
+    startLiveClassroomSession
   } = useClassroom();
 
 
   const [activeTab, setActiveTab] = useState('transcript'); // transcript, code, doubts
   const [doubtText, setDoubtText] = useState("");
   const [isAnon, setIsAnon] = useState(false);
+  const [simLLM, setSimLLM] = useState("openai/gpt-oss-120b");
+  const [isGenerating, setIsGenerating] = useState({});
+
+  const handleAskAI = async (doubtId) => {
+    // Find the question text so we can fall back if the ID is invalid (e.g. float timestamp)
+    const doubtObj = doubts.find(d => String(d.id) === String(doubtId));
+    const questionText = doubtObj ? doubtObj.question : "";
+
+    setIsGenerating(prev => ({ ...prev, [doubtId]: true }));
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${activeClassroom.code}/doubts/${doubtId}/answer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ model: simLLM, fallback_question: questionText })
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        console.error("Backend Error:", errData);
+        alert(`AI Error: ${typeof errData.detail === 'object' ? JSON.stringify(errData.detail) : errData.detail || response.statusText}`);
+      }
+    } catch (e) {
+      console.error("Fetch Error:", e);
+      alert(`Network Error: ${e.message}`);
+    } finally {
+      setIsGenerating(prev => ({ ...prev, [doubtId]: false }));
+    }
+  };
   
   // Custom Chat bot state
   const [chatQuestion, setChatQuestion] = useState("");
@@ -80,19 +114,7 @@ const LiveClassroom = ({ setCurrentPage }) => {
     }
   }, [transcripts]);
 
-  // Simulated Speech transcribing tick when Whisper is set live
-  useEffect(() => {
-    let timer = null;
-    if (isWhisperRunning && user?.role === 'teacher') {
-      timer = setInterval(() => {
-        triggerLiveTranscriptLine(activeClassroom?.code === 'AI502' ? 'AI502' : 'CS101');
-      }, 5500);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [isWhisperRunning, user]);
-
+  // Manual transcription logic has been moved to ClassroomContext via WebSockets
   const handleAskDoubt = (e) => {
     e.preventDefault();
     if (!doubtText) return;
@@ -110,28 +132,66 @@ const LiveClassroom = ({ setCurrentPage }) => {
     setChatLoading(true);
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/classrooms/doubts', {
-        // We will call the AI service directly from backend simulated API
+      setChatResponses(prev => [...prev, { role: 'assistant', text: '' }]);
+      
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${activeClassroom.code}/chat`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({ question: userMsg.text })
+        body: JSON.stringify({ message: userMsg.text, model: simLLM })
       });
-      // Just simulate latency directly
-      setTimeout(() => {
-        let answer = "Based on the live transcripts, the instructor is focusing on structural paradigms. Under high loads, this eliminates performance blockages and ensures higher redundancy.";
-        if (userMsg.text.toLowerCase().includes("saga")) {
-          answer = "The Saga Pattern implements distributed transactions via a sequence of local transactions. Each updates the DB and publishes events to trigger next steps. If one step fails, backward compensating events execute.";
-        } else if (userMsg.text.toLowerCase().includes("attention") || userMsg.text.toLowerCase().includes("transformer")) {
-          answer = "Self-attention computes token relationship scores by taking QK^T, scaling it by the square root of key dimensions, applying Softmax, and multiplying the result by the Value matrix.";
-        }
-        
-        setChatResponses(prev => [...prev, { role: 'assistant', text: answer }]);
-        setChatLoading(false);
-      }, 800);
 
-    } catch (err) {
+      if (!response.body) throw new Error("No response body");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        if (value) {
+          const chunkValue = decoder.decode(value);
+          const lines = chunkValue.split("\n");
+          
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const dataStr = line.replace("data: ", "").trim();
+              if (dataStr === "[DONE]") {
+                break;
+              }
+              try {
+                const parsed = JSON.parse(dataStr);
+                setChatResponses(prev => {
+                  const newResponses = [...prev];
+                  const lastIndex = newResponses.length - 1;
+                  const lastResponse = { ...newResponses[lastIndex] };
+                  if (lastResponse.role === 'assistant') {
+                    lastResponse.text += parsed.content;
+                  }
+                  newResponses[lastIndex] = lastResponse;
+                  return newResponses;
+                });
+              } catch (e) {
+                // Ignore parse errors on incomplete chunks
+              }
+            }
+          }
+        }
+      }
+      setChatLoading(false);
+    } catch (error) {
+      console.error("Chat error:", error);
+      setChatResponses(prev => {
+        const newResponses = [...prev];
+        const lastResponse = newResponses[newResponses.length - 1];
+        if (lastResponse.role === 'assistant') {
+          lastResponse.text = "Error: Failed to connect to AI Classroom Assistant.";
+        }
+        return newResponses;
+      });
       setChatLoading(false);
     }
   };
@@ -171,7 +231,7 @@ const LiveClassroom = ({ setCurrentPage }) => {
           Please return to the dashboard and join or start a classroom session first.
         </p>
         <button
-          onClick={() => setCurrentPage('dashboard')}
+          onClick={() => navigate('/dashboard')}
           className="mt-6 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 text-gray-900 text-xs font-bold rounded shadow-sm transition-colors"
         >
           Return to Dashboard
@@ -180,7 +240,7 @@ const LiveClassroom = ({ setCurrentPage }) => {
     );
   }
 
-  const isTeacher = user?.role === 'teacher' || user?.role === 'admin';
+  const isTeacher = user?.role === 'Teacher' || user?.role === 'College Admin';
 
   return (
     <div className="space-y-6">
@@ -206,7 +266,13 @@ const LiveClassroom = ({ setCurrentPage }) => {
         <div className="flex items-center space-x-3">
           {isTeacher ? (
             <button
-              onClick={() => setIsWhisperRunning(!isWhisperRunning)}
+              onClick={() => {
+                if (isWhisperRunning) {
+                  stopAudioStream();
+                } else {
+                  startAudioStream();
+                }
+              }}
               className={`px-4 py-2 rounded text-xs font-bold flex items-center space-x-1.5 transition-all ${
                 isWhisperRunning 
                   ? 'bg-red-50 hover:bg-red-500/20 border border-red-500/30 text-red-650' 
@@ -234,8 +300,20 @@ const LiveClassroom = ({ setCurrentPage }) => {
             </div>
           )}
 
+          {isTeacher && (
+            <button
+              onClick={() => { 
+                startLiveClassroomSession(activeClassroom.code, false);
+                leaveClassroom(); 
+                navigate('/dashboard'); 
+              }}
+              className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors shadow-sm"
+            >
+              End Class
+            </button>
+          )}
           <button
-            onClick={() => { leaveClassroom(); setCurrentPage('dashboard'); }}
+            onClick={() => { leaveClassroom(); navigate('/dashboard'); }}
             className="px-4 py-2 rounded bg-white hover:bg-white border border-gray-200 hover:border-gray-200 text-xs font-bold text-gray-700 transition-colors"
           >
             Leave Room
@@ -296,12 +374,11 @@ const LiveClassroom = ({ setCurrentPage }) => {
                     <p className="text-[10px] text-gray-400 mt-1">Start speech input to record transcript</p>
                   </div>
                 ) : (
-                  transcripts.map((line, idx) => (
-                    <div key={line.id || idx} className="p-3 bg-gray-50 rounded border border-gray-200 text-xs flex gap-3.5 transition-colors hover:border-gray-200">
-                      <span className="text-[10px] text-gray-500 font-mono font-bold tracking-wider pt-0.5 select-none">{line.timestamp}</span>
-                      <p className="text-gray-800 leading-relaxed font-sans">{line.text}</p>
-                    </div>
-                  ))
+                  <div className="p-4 bg-gray-50 rounded border border-gray-200 text-gray-800 text-sm font-semibold leading-loose text-justify">
+                    {transcripts.map((line, idx) => (
+                      <span key={line.id || idx} className="mr-1">{line.text}</span>
+                    ))}
+                  </div>
                 )}
                 <div ref={transcriptsEndRef} />
               </div>
@@ -380,6 +457,24 @@ const LiveClassroom = ({ setCurrentPage }) => {
                   </span>
                 </h4>
 
+                {/* AI Assistant Controls (for Teachers) */}
+                {isTeacher && (
+                  <div className="mb-6 p-4 bg-indigo-50/50 rounded-lg border border-indigo-100 flex items-center justify-between">
+                    <div>
+                      <h5 className="text-xs font-bold text-indigo-900">AI Model Core</h5>
+                      <p className="text-[10px] text-indigo-600 font-semibold mt-0.5">Select the Groq model for automated doubt answering</p>
+                    </div>
+                    <select
+                      value={simLLM}
+                      onChange={(e) => setSimLLM(e.target.value)}
+                      className="bg-white border border-indigo-200 rounded px-3 py-1.5 text-xs text-gray-800 font-bold focus:outline-none focus:border-indigo-500 w-48"
+                    >
+                      <option value="openai/gpt-oss-120b">GPT-OSS 120B</option>
+                      <option value="qwen/qwen3.6-27b">Qwen 3.6 27B</option>
+                    </select>
+                  </div>
+                )}
+
                 {/* Submissions form (for students) */}
                 {!isTeacher && (
                   <form onSubmit={handleAskDoubt} className="p-4 bg-white rounded-lg border border-gray-200 space-y-3 mb-6">
@@ -427,11 +522,13 @@ const LiveClassroom = ({ setCurrentPage }) => {
                           }`}>
                             {doubt.is_anonymous ? 'Ghost Query' : 'Public query'}
                           </span>
-                          <span className="text-[10px] text-gray-500 font-bold">{doubt.student_name}</span>
+                          <span className="text-[10px] text-gray-500 font-bold">
+                            {isTeacher && doubt.is_anonymous ? `${doubt.student_name} (Real: ${doubt.real_name || 'Anonymous'})` : doubt.student_name}
+                          </span>
                         </div>
                         <p className="text-gray-800 text-xs font-semibold">{doubt.question}</p>
                         
-                        {doubt.ai_answer && (
+                        {doubt.ai_answer ? (
                           <div className="p-3 bg-white/80 rounded border border-gray-200 flex gap-2.5">
                             <Sparkles className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
                             <div>
@@ -439,6 +536,23 @@ const LiveClassroom = ({ setCurrentPage }) => {
                               <p className="text-gray-600 text-xs mt-1 leading-relaxed">{doubt.ai_answer}</p>
                             </div>
                           </div>
+                        ) : (
+                          isTeacher && (
+                            <div className="flex justify-end pt-2">
+                              <button
+                                onClick={() => handleAskAI(doubt.id)}
+                                disabled={isGenerating[doubt.id]}
+                                className="px-3 py-1.5 rounded bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-bold transition-all flex items-center space-x-1.5 disabled:opacity-50"
+                              >
+                                {isGenerating[doubt.id] ? (
+                                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <BrainCircuit className="h-3.5 w-3.5" />
+                                )}
+                                <span>{isGenerating[doubt.id] ? "Generating..." : "Ask AI"}</span>
+                              </button>
+                            </div>
+                          )
                         )}
                       </div>
                     ))

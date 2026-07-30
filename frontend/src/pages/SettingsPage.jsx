@@ -78,41 +78,6 @@ const SettingsPage = () => {
             </div>
           </div>
 
-          {/* AI Simulation Options */}
-          <div className="space-y-4 pt-4 border-t border-gray-200">
-            <h4 className="text-xs uppercase font-extrabold tracking-widest text-indigo-600">Telemetry & Simulation Settings</h4>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-500 mb-1.5">Speech API Sensitivity Index</label>
-                <div className="flex items-center space-x-4">
-                  <input
-                    type="range"
-                    min="10"
-                    max="100"
-                    value={whisperSensitivity}
-                    onChange={(e) => setWhisperSensitivity(e.target.value)}
-                    className="flex-1 accent-indigo-500 bg-white rounded h-2"
-                  />
-                  <span className="text-xs font-bold text-indigo-600 font-mono w-8">{whisperSensitivity}%</span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-500 mb-1.5">Simulated AI Model Core</label>
-                <select
-                  value={simLLM}
-                  onChange={(e) => setSimLLM(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded px-2.5 py-2.5 text-xs text-gray-600 font-bold focus:outline-none"
-                >
-                  <option value="Llama-3-Academic">Llama-3-Academic (Fast)</option>
-                  <option value="GPT-4o-Academic">GPT-4o-Academic (Accurate)</option>
-                  <option value="Claude-3-Academic">Claude-3-Academic (Detailed)</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
           {/* Submit Button */}
           <div className="pt-4 border-t border-gray-200 flex justify-end">
             <button

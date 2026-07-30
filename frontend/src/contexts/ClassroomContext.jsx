@@ -25,8 +25,9 @@ export const ClassroomProvider = ({ children }) => {
   const [aiLogs, setAiLogs] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [isWhisperRunning, setIsWhisperRunning] = useState(false);
-  const [whisperMetrics, setWhisperMetrics] = useState({ latency_ms: 0, confidence: 1.0 });
+  const [whisperMetrics, setWhisperMetrics] = useState({ latency: 0, confidence: 100 });
   const [activeStudentsList, setActiveStudentsList] = useState([]);
+  const mediaRecorderRef = useRef(null);
 
   const ws = useRef(null);
 
@@ -35,40 +36,48 @@ export const ClassroomProvider = ({ children }) => {
   const fetchClassroomDetails = async (code) => {
     try {
       // 1. Fetch main info
-      const resMain = await fetch(`http://127.0.0.1:8000/api/classrooms/${code}`);
+      const resMain = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       if (!resMain.ok) throw new Error("Classroom room not found");
-      const mainInfo = await resMain.json();
+      const mainInfoList = await resMain.json();
+      const mainInfo = mainInfoList.find(c => c.code.toLowerCase() === code.toLowerCase()) || { code, is_live: true, name: "Live Session" };
 
-      // Restrict students from joining offline/non-live classrooms
-      if (user?.role === 'student' && !mainInfo.is_live) {
-        throw new Error("Classroom session is currently offline. Please wait for your instructor to launch the classroom session.");
-      }
+      // Allow students to join and wait for instructor to go live
 
       setActiveClassroom(mainInfo);
 
       // 2. Fetch transcript log
-      const resTrans = await fetch(`http://127.0.0.1:8000/api/classrooms/${code}/transcripts`);
+      const resTrans = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${code}/records`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       if (resTrans.ok) {
         const transData = await resTrans.json();
         setTranscripts(transData);
       }
 
-      // 3. Fetch doubt board log
-      const resDoubts = await fetch(`http://127.0.0.1:8000/api/classrooms/${code}/doubts`);
-      if (resDoubts.ok) {
-        const doubtsData = await resDoubts.json();
-        setDoubts(doubtsData);
-      }
+      // 3. Fetch doubt board log (mock for now or implement if needed)
+      // const resDoubts = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${code}/doubts`, {
+      //   headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      // });
+      // if (resDoubts.ok) {
+      //   const doubtsData = await resDoubts.json();
+      //   setDoubts(doubtsData);
+      // }
 
       // 4. Fetch subject resources
-      const resRes = await fetch(`http://127.0.0.1:8000/api/classrooms/${code}/resources`);
+      const resRes = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${code}/resources`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       if (resRes.ok) {
         const resourcesData = await resRes.json();
         setResources(resourcesData);
       }
       
       // 5. Fetch Attendance
-      const resAtt = await fetch(`http://127.0.0.1:8000/api/classrooms/${code}/attendance`);
+      const resAtt = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${code}/attendance`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       if (resAtt.ok) {
         const attData = await resAtt.json();
         setAttendance(attData);
@@ -84,7 +93,7 @@ export const ClassroomProvider = ({ children }) => {
       ws.current.close();
     }
 
-    const socketUrl = `ws://127.0.0.1:8000/ws/classroom/${roomCode.toUpperCase()}?user_name=${encodeURIComponent(user?.name || "Anonymous")}&user_id=${encodeURIComponent(user?.id || "")}`;
+    const socketUrl = `ws://127.0.0.1:8000/ws/classroom/${roomCode.toUpperCase()}?user_name=${encodeURIComponent(user?.full_name || "Anonymous")}&user_id=${encodeURIComponent(user?.id || "")}`;
     const socket = new WebSocket(socketUrl);
     ws.current = socket;
 
@@ -103,6 +112,8 @@ export const ClassroomProvider = ({ children }) => {
         if (msg.observability) {
           setAiLogs(prev => [msg.observability, ...prev]);
         }
+      } else if (msg.type === "doubt_answered") {
+        setDoubts(prev => prev.map(d => d.id === msg.doubt_id ? { ...d, ai_answer: msg.ai_answer } : d));
       } else if (msg.type === "transcript_segment") {
         setTranscripts(prev => [...prev, {
           id: Date.now(),
@@ -110,7 +121,7 @@ export const ClassroomProvider = ({ children }) => {
           timestamp: msg.timestamp
         }]);
         setWhisperMetrics({
-          latency_ms: msg.latency_ms,
+          latency: msg.latency_ms,
           confidence: msg.confidence
         });
       } else if (msg.type === "sentiment_sync") {
@@ -154,12 +165,63 @@ export const ClassroomProvider = ({ children }) => {
     setAlerts([]);
     setIsWhisperRunning(false);
     setActiveStudentsList([]);
+    stopAudioStream();
+  };
+
+  const audioIntervalRef = useRef(null);
+
+  const startAudioStream = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      const recordChunk = () => {
+        const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        mediaRecorderRef.current = mediaRecorder;
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0 && ws.current && ws.current.readyState === WebSocket.OPEN) {
+            const reader = new FileReader();
+            reader.readAsDataURL(event.data);
+            reader.onloadend = () => {
+              const base64Audio = reader.result;
+              ws.current.send(JSON.stringify({
+                type: "audio_chunk",
+                audio: base64Audio
+              }));
+            };
+          }
+        };
+
+        mediaRecorder.start();
+        setTimeout(() => {
+          if (mediaRecorder.state !== "inactive") {
+            mediaRecorder.stop();
+          }
+        }, 2000);
+      };
+
+      recordChunk();
+      audioIntervalRef.current = setInterval(recordChunk, 2000);
+      setIsWhisperRunning(true);
+    } catch (err) {
+      console.error("Error accessing microphone", err);
+      setIsWhisperRunning(false);
+    }
+  };
+
+  const stopAudioStream = () => {
+    if (audioIntervalRef.current) clearInterval(audioIntervalRef.current);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+    }
+    setIsWhisperRunning(false);
   };
 
   // Actions broadcasted to server over WebSocket
   const startLiveClassroomSession = async (code, isLive) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/classrooms/${code}/live`, {
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${code}/live`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -183,7 +245,7 @@ export const ClassroomProvider = ({ children }) => {
         type: "code_change",
         code: newCode,
         language: lang,
-        sender: user?.name
+        sender: user?.full_name
       }));
     }
   };
@@ -195,7 +257,7 @@ export const ClassroomProvider = ({ children }) => {
         question: question,
         is_anonymous: isAnon,
         student_id: user?.id,
-        student_name: user?.name
+        student_name: user?.full_name
       }));
     }
   };
@@ -228,17 +290,23 @@ export const ClassroomProvider = ({ children }) => {
     }
   };
 
-  const uploadResource = async (title, fileType, fileSize, classroomCode = null) => {
+  const uploadResource = async (title, file, targetSection = null, classroomCode = null) => {
     const targetCode = classroomCode || activeClassroom?.code;
-    if (!targetCode) return;
+    if (!targetCode || !file) return;
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/classrooms/${targetCode}/resources`, {
+      const formData = new FormData();
+      formData.append("title", title);
+      formData.append("file", file);
+      if (targetSection && targetSection !== "All Sections") {
+        formData.append("target_section", targetSection);
+      }
+
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${targetCode}/resources`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({ title, file_type: fileType, file_size: fileSize }),
+        body: formData,
       });
       if (response.ok) {
         const newRes = await response.json();
@@ -250,27 +318,43 @@ export const ClassroomProvider = ({ children }) => {
     }
   };
 
-  const downloadResource = async (id) => {
+  const downloadResource = async (id, title, fileType) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/resources/${id}/download`, {
-        method: 'POST'
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${id}/download`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
       });
       if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${title}.${fileType.toLowerCase()}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        
+        // Track download count (optimistic update since backend doesn't track it currently in download)
         setResources(prev => prev.map(r => r.id === id ? { ...r, downloads: r.downloads + 1 } : r));
+      } else {
+        console.error("Failed to download resource");
       }
     } catch (error) {
-      console.error("Error tracking download:", error);
+      console.error("Error downloading resource:", error);
     }
   };
 
   const simulateAttendance = async () => {
     if (!activeClassroom) return;
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/classrooms/${activeClassroom.code}/attendance/simulate`, {
-        method: 'POST'
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${activeClassroom.code}/attendance/simulate`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (response.ok) {
-        const resAtt = await fetch(`http://127.0.0.1:8000/api/classrooms/${activeClassroom.code}/attendance`);
+        const resAtt = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${activeClassroom.code}/attendance`);
         if (resAtt.ok) {
           const attData = await resAtt.json();
           setAttendance(attData);
@@ -319,7 +403,9 @@ export const ClassroomProvider = ({ children }) => {
       broadcastAlert,
       uploadResource,
       downloadResource,
-      simulateAttendance
+      simulateAttendance,
+      startAudioStream,
+      stopAudioStream
     }}>
       {children}
     </ClassroomContext.Provider>

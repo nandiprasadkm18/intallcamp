@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { GraduationCap, Lock, Mail, User as UserIcon, Shield, ArrowLeft } from 'lucide-react';
+import { GraduationCap, Lock, Mail, User as UserIcon, Shield, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 
 const AuthPage = ({ onBackToLanding }) => {
   const { login, signup } = useAuth();
@@ -9,6 +9,8 @@ const AuthPage = ({ onBackToLanding }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [section, setSection] = useState('7th Sem A');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -21,7 +23,7 @@ const AuthPage = ({ onBackToLanding }) => {
       if (isLogin) {
         await login(email, password);
       } else {
-        await signup(name, email, password, role);
+        await signup(name, email, password, role, section);
       }
     } catch (err) {
       setError(err.message || 'An error occurred during authentication');
@@ -91,28 +93,7 @@ const AuthPage = ({ onBackToLanding }) => {
               </div>
             )}
 
-            {/* Role Select (Only for Register) */}
-            {!isLogin && (
-              <div>
-                <label className="block text-xs font-extrabold uppercase text-gray-600 tracking-wider mb-2">Select Account Role</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {['student', 'teacher'].map((r) => (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => setRole(r)}
-                      className={`py-2 rounded-lg text-xs font-bold uppercase border transition-all ${
-                        role === r 
-                          ? 'bg-black/15 border-indigo-500/40 text-indigo-600' 
-                          : 'bg-white border-gray-200 text-gray-600 hover:bg-white hover:text-gray-700'
-                      }`}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+
 
             {/* Full Name (Only for Register) */}
             {!isLogin && (
@@ -129,6 +110,23 @@ const AuthPage = ({ onBackToLanding }) => {
                     placeholder="Enter full name"
                   />
                 </div>
+              </div>
+            )}
+
+            {/* Section (Only for Student Register) */}
+            {!isLogin && role === 'student' && (
+              <div>
+                <label className="block text-xs font-semibold uppercase text-gray-600 tracking-wider mb-1.5">Section</label>
+                <select
+                  value={section}
+                  onChange={(e) => setSection(e.target.value)}
+                  className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-colors"
+                >
+                  <option value="7th Sem A">7th Sem A</option>
+                  <option value="7th Sem B">7th Sem B</option>
+                  <option value="7th Sem C">7th Sem C</option>
+                  <option value="7th Sem D">7th Sem D</option>
+                </select>
               </div>
             )}
 
@@ -154,13 +152,20 @@ const AuthPage = ({ onBackToLanding }) => {
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-lg pl-10 pr-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-colors"
+                  className="w-full bg-white border border-gray-200 rounded-lg pl-10 pr-10 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-colors"
                   placeholder="••••••••"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
             </div>
 

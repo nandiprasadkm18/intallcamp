@@ -2,6 +2,16 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext(null);
 
+const normalizeUser = (u) => {
+  if (!u || !u.role) return u;
+  let role = u.role.toLowerCase();
+  if (role === 'teacher') role = 'Teacher';
+  else if (role === 'student') role = 'Student';
+  else if (role === 'college admin') role = 'College Admin';
+  else if (role === 'super admin') role = 'Super Admin';
+  return { ...u, role };
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,14 +30,14 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUserProfile = async (authToken) => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/auth/me', {
+      const response = await fetch('http://127.0.0.1:8000/api/v1/auth/me', {
         headers: {
           'Authorization': `Bearer ${authToken}`
         }
       });
       if (response.ok) {
         const userData = await response.json();
-        setUser(userData);
+        setUser(normalizeUser(userData));
       } else {
         logout();
       }
@@ -41,19 +51,23 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/auth/login', {
+      const formData = new URLSearchParams();
+      formData.append('username', email);
+      formData.append('password', password);
+
+      const response = await fetch('http://127.0.0.1:8000/api/v1/auth/login', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: JSON.stringify({ email, password }),
+        body: formData,
       });
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.detail || 'Login failed');
       }
       setToken(data.access_token);
-      setUser(data.user);
+      setUser(normalizeUser(data.user));
       return data.user;
     } catch (error) {
       console.error("Login error:", error);
@@ -61,22 +75,34 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const signup = async (name, email, password, role) => {
+  const signup = async (name, email, password, role, section) => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/auth/signup', {
+      // Map frontend roles to backend role strings
+      const roleMap = {
+        'student': 'Student',
+        'teacher': 'Teacher'
+      };
+      
+      const response = await fetch('http://127.0.0.1:8000/api/v1/users/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, email, password, role }),
+        body: JSON.stringify({ 
+          full_name: name, 
+          email: email, 
+          password: password, 
+          role_name: roleMap[role] || 'Student',
+          section: role === 'student' ? section : null
+        }),
       });
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.detail || 'Registration failed');
       }
-      setToken(data.access_token);
-      setUser(data.user);
-      return data.user;
+      
+      // Auto login after registration
+      return await login(email, password);
     } catch (error) {
       console.error("Signup error:", error);
       throw error;

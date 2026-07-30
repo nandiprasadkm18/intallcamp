@@ -22,28 +22,28 @@ const ResourcesPage = () => {
   
   // Custom upload fields
   const [title, setTitle] = useState("");
-  const [type, setType] = useState("PDF");
+  const [targetSection, setTargetSection] = useState("All Sections");
+  const [uploadFile, setUploadFile] = useState(null);
   const [success, setSuccess] = useState("");
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!title) return;
-    const sizes = ["1.8 MB", "3.4 MB", "5.2 MB", "0.9 MB"];
-    const fileSize = sizes[Math.floor(Math.random() * sizes.length)];
+    if (!title || !uploadFile) return;
     
-    await uploadResource(title, type, fileSize);
+    // We need activeClassroom in scope, let's grab it from context
+    const targetCode = "GLOBAL"; // We'll let Context default to activeClassroom if this is omitted.
+    await uploadResource(title, uploadFile, targetSection);
     setTitle("");
+    setUploadFile(null);
     setSuccess("Academic document package created and stored successfully.");
     setTimeout(() => setSuccess(""), 4000);
   };
 
-  const handleDownload = async (id, title) => {
-    await downloadResource(id);
-    // Simulate downloading by opening a alert
-    alert(`Initiating secure institutional download for packet: "${title}"`);
+  const handleDownload = async (id, title, fileType) => {
+    await downloadResource(id, title, fileType);
   };
 
-  const isTeacher = user?.role === 'teacher' || user?.role === 'admin';
+  const isTeacher = user?.role === 'Teacher' || user?.role === 'College Admin';
 
   // Filter list by folder and search
   const filtered = resources.filter(res => {
@@ -85,40 +85,42 @@ const ResourcesPage = () => {
           </div>
 
           {/* Subject Folders */}
-          <div className="academic-card p-6">
-            <h4 className="font-bold text-sm text-gray-800 border-b border-gray-200 pb-4 mb-4">
-              Subject Folders Roster
-            </h4>
-            <nav className="space-y-1.5">
-              {[
-                { id: 'all', name: 'All Packets', count: resources.length },
-                { id: 'notes', name: 'PDF Lecture Notes', count: resources.filter(r => r.file_type === 'PDF').length },
-                { id: 'code', name: 'Source Archives (ZIP)', count: resources.filter(r => r.file_type === 'ZIP').length },
-                { id: 'sheets', name: 'Syllabi & Sheets (PPT/DOC)', count: resources.filter(r => r.file_type === 'PPTX' || r.file_type === 'DOCX').length }
-              ].map(folder => {
-                const isActive = activeFolder === folder.id;
-                return (
-                  <button
-                    key={folder.id}
-                    onClick={() => setActiveFolder(folder.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded text-xs font-bold transition-all uppercase tracking-wider ${
-                      isActive 
-                        ? 'bg-black/10 text-indigo-600 border border-indigo-200' 
-                        : 'text-gray-600 hover:bg-white/40 hover:text-gray-800'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2.5">
-                      <Folder className={`h-4 w-4 ${isActive ? 'text-indigo-600' : 'text-gray-500'}`} />
-                      <span>{folder.name}</span>
-                    </div>
-                    <span className="px-1.5 py-0.5 rounded bg-white text-gray-500 border border-gray-200 text-[10px]">
-                      {folder.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
+          {!isTeacher && (
+            <div className="academic-card p-6">
+              <h4 className="font-bold text-sm text-gray-800 border-b border-gray-200 pb-4 mb-4">
+                Subject Folders Roster
+              </h4>
+              <nav className="space-y-1.5">
+                {[
+                  { id: 'all', name: 'All Packets', count: resources.length },
+                  { id: 'notes', name: 'PDF Lecture Notes', count: resources.filter(r => r.file_type === 'PDF').length },
+                  { id: 'code', name: 'Source Archives (ZIP)', count: resources.filter(r => r.file_type === 'ZIP').length },
+                  { id: 'sheets', name: 'Syllabi & Sheets (PPT/DOC)', count: resources.filter(r => r.file_type === 'PPTX' || r.file_type === 'DOCX').length }
+                ].map(folder => {
+                  const isActive = activeFolder === folder.id;
+                  return (
+                    <button
+                      key={folder.id}
+                      onClick={() => setActiveFolder(folder.id)}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded text-xs font-bold transition-all uppercase tracking-wider ${
+                        isActive 
+                          ? 'bg-black/10 text-indigo-600 border border-indigo-200' 
+                          : 'text-gray-600 hover:bg-white/40 hover:text-gray-800'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2.5">
+                        <Folder className={`h-4 w-4 ${isActive ? 'text-indigo-600' : 'text-gray-500'}`} />
+                        <span>{folder.name}</span>
+                      </div>
+                      <span className="px-1.5 py-0.5 rounded bg-white text-gray-500 border border-gray-200 text-[10px]">
+                        {folder.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+          )}
 
           {/* Uploader (Teachers only) */}
           {isTeacher && (
@@ -140,16 +142,27 @@ const ResourcesPage = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-500 mb-1.5">File Format</label>
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">File</label>
+                  <input
+                    type="file"
+                    required
+                    onChange={(e) => setUploadFile(e.target.files[0])}
+                    className="w-full bg-white border border-gray-200 rounded px-3 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-indigo-500 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-500 mb-1.5">Target Section</label>
                   <select
-                    value={type}
-                    onChange={(e) => setType(e.target.value)}
-                    className="w-full bg-white border border-gray-200 rounded px-2.5 py-2 text-xs text-gray-600 font-bold focus:outline-none"
+                    value={targetSection}
+                    onChange={(e) => setTargetSection(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
                   >
-                    <option value="PDF">PDF (Lecture Notes)</option>
-                    <option value="ZIP">ZIP (Code Sandbox)</option>
-                    <option value="PPTX">PPTX (Lecture Slides)</option>
-                    <option value="DOCX">DOCX (Syllabus/Sheet)</option>
+                    <option value="All Sections">All Sections</option>
+                    <option value="7th Sem A">7th Sem A</option>
+                    <option value="7th Sem B">7th Sem B</option>
+                    <option value="7th Sem C">7th Sem C</option>
+                    <option value="7th Sem D">7th Sem D</option>
                   </select>
                 </div>
                 <button
@@ -203,7 +216,7 @@ const ResourcesPage = () => {
                     </div>
 
                     <button
-                      onClick={() => handleDownload(file.id, file.title)}
+                      onClick={() => handleDownload(file.id, file.title, file.file_type)}
                       className="p-2 bg-white hover:bg-white border border-gray-200 rounded-lg text-gray-600 hover:text-indigo-600 transition-colors"
                       title="Download Secure Lecture Packet"
                     >

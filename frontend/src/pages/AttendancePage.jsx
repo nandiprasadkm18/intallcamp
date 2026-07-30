@@ -42,11 +42,11 @@ const AttendancePage = () => {
     }, 1200);
   };
 
-  const isTeacher = user?.role === 'teacher' || user?.role === 'admin';
+  const isTeacher = user?.role === 'Teacher' || user?.role === 'College Admin';
 
   // Compute mock chart metrics
-  const total = attendance.length > 0 ? attendance.length : 15;
-  const present = attendance.length > 0 ? attendance.filter(a => a.status === 'present').length : 13;
+  const total = attendance.length > 0 ? attendance.length : 0;
+  const present = attendance.length > 0 ? attendance.filter(a => a.status === 'present').length : 0;
   const absent = total - present;
 
   const data = [
