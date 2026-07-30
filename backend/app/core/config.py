@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     
     # Postgres Database Config
     POSTGRES_USER: str = "postgres"
-    POSTGRES_PASSWORD: str = "nandi"
+    POSTGRES_PASSWORD: str = "password"
     POSTGRES_SERVER: str = "localhost"
     POSTGRES_PORT: str = "5432"
     POSTGRES_DB: str = "majorproject"
