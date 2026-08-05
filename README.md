@@ -71,6 +71,11 @@ Before you begin, ensure you have the following installed:
 ### 1️⃣ Database & Cache Setup
 Ensure your **PostgreSQL** server is running and create a new database (e.g., `majorproject`). Make sure your **Redis** server is active (default: `localhost:6379`).
 
+> [!TIP]
+> **Running Redis on Windows:**
+> - If using **WSL (Windows Subsystem for Linux)**, open your WSL terminal and run: `sudo service redis-server start`
+> - If using a **native Windows port**, open your terminal and run: `redis-server`
+
 ### 2️⃣ Environment Variables
 Create a `.env` file in the `backend/` directory using this template:
 
