@@ -8,7 +8,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
 [![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
+
 
 </div>
 
@@ -27,7 +27,6 @@ graph TD
     
     subgraph Data Layer
         API <--> DB[(🐘 PostgreSQL + pgvector)]
-        API <--> Cache[(🔴 Redis Cache)]
     end
     
     subgraph External Services
@@ -48,7 +47,7 @@ Before you begin, ensure you have the following installed:
 
 - **Python 3.10+** (3.12 recommended)
 - **PostgreSQL** (with `pgvector` extension)
-- **Redis Server** (for caching & background tasks)
+
 - Core dependencies: `fastapi`, `uvicorn`, `sqlalchemy`, `psycopg2-binary`, `pgvector`
 - Security & Utilities: `pyjwt`, `bcrypt`, `python-multipart`, `python-dotenv`
 - File Processing: `pymupdf`, `sentence-transformers`, `boto3`
@@ -68,22 +67,15 @@ Before you begin, ensure you have the following installed:
 
 ## ⚙️ Quick Start
 
-### 1️⃣ Database & Cache Setup
-Ensure your **PostgreSQL** server is running and create a new database (e.g., `majorproject`). Make sure your **Redis** server is active (default: `localhost:6379`).
-
-> [!TIP]
-> **Running Redis on Windows:**
-> - If using **WSL (Windows Subsystem for Linux)**, open your WSL terminal and run: `sudo service redis-server start`
-> - If using a **native Windows port**, open your terminal and run: `redis-server`
+### 1️⃣ Database Setup
+Ensure your **PostgreSQL** server is running and create a new database (e.g., `majorproject`).
 
 ### 2️⃣ Environment Variables
 Create a `.env` file in the `backend/` directory using this template:
 
 ```env
-# 🐘 Database & Cache
+# 🐘 Database Configuration
 DATABASE_URL=postgresql://<user>:<password>@localhost/<db_name>
-REDIS_HOST=localhost
-REDIS_PORT=6379
 
 # 🔐 Security
 SECRET_KEY=your_super_secret_key_here
