@@ -88,77 +88,130 @@ const TimetablePage = () => {
 
       {error && <div className="p-3.5 text-xs font-semibold rounded bg-red-50 border border-red-200 text-red-650">{error}</div>}
 
-      {/* VIEW 1: DAILY TIMELINE (SPACIOUS AND HIGH-AESTHETIC) */}
       {viewMode === "timeline" && (
-        <div className="space-y-6">
-          {/* Day Tabs Selector */}
-          <div className="flex flex-wrap gap-2.5 pb-2 border-b border-gray-200">
-            {daysOfWeek.map((day) => {
-              const daySlots = groupedTimetables[day] || [];
-              const isSelected = activeDay === day;
-              return (
-                <button
-                  key={day}
-                  onClick={() => setActiveDay(day)}
-                  className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 border cursor-pointer ${
-                    isSelected
-                      ? "bg-indigo-50 text-indigo-600 border-indigo-500/40 shadow-sm"
-                      : "bg-white/40 text-gray-600 border-gray-200 hover:border-gray-200 hover:text-gray-800"
-                  }`}
-                >
-                  <span className="capitalize">{day}</span>
-                  <span className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold ${
-                    isSelected ? "bg-indigo-100 text-indigo-700" : "bg-white text-gray-500"
-                  }`}>
-                    {daySlots.length}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+        <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm mt-6">
+          {(() => {
+            if (timetables.length === 0) {
+              return <div className="py-12 text-center text-slate-500 italic bg-white text-xs">No timetables found for this section.</div>;
+            }
 
-          {/* Daily Schedule Timeline List */}
-          <div className="relative pl-6 border-l border-gray-200 space-y-5 py-2">
-            {(groupedTimetables[activeDay] || []).length === 0 ? (
-              <div className="academic-card p-12 text-center max-w-md mx-auto bg-white/20 border border-gray-200 rounded-xl">
-                <Calendar className="h-8 w-8 text-gray-400 mx-auto mb-3 animate-pulse" />
-                <h4 className="font-bold text-gray-700 text-sm capitalize">No lectures scheduled for {activeDay}</h4>
-                <p className="text-[10px] text-slate-600 mt-1 uppercase font-bold tracking-widest font-mono">Enjoy your Free Day!</p>
-              </div>
-            ) : (
-              (groupedTimetables[activeDay] || []).map((slot, index) => (
-                <div key={slot.id} className="relative group">
-                  {/* Timeline Dot Indicator */}
-                  <span className="absolute -left-[31px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white border-2 border-[#070b15]"></span>
+            const daysOfWeekList = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            
+            const parseTime = (timeStr) => {
+              if (!timeStr) return 0;
+              const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+              if (!match) return 0;
+              let [, hours, minutes, period] = match;
+              hours = parseInt(hours, 10);
+              minutes = parseInt(minutes, 10);
+              if (period.toUpperCase() === 'PM' && hours !== 12) hours += 12;
+              if (period.toUpperCase() === 'AM' && hours === 12) hours = 0;
+              return hours * 60 + minutes;
+            };
 
-                  <div className="academic-card p-5 bg-white/40 border border-gray-200 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-5 shadow-[0_4px_12px_rgba(0,0,0,0.1)] group">
-                    {/* Time Slot info */}
-                    <div className="flex items-center gap-3 md:w-1/4 shrink-0 border-b md:border-b-0 md:border-r border-gray-200 pb-3 md:pb-0 md:pr-4">
-                      <Clock className="h-4 w-4 text-indigo-600" />
-                      <div className="space-y-0.5">
-                        <span className="text-[9px] uppercase font-bold text-gray-500 tracking-wider">Time Slot</span>
-                        <p className="font-bold text-xs text-gray-800 font-mono">{slot.start_time} - {slot.end_time}</p>
-                      </div>
-                    </div>
+            const standardSlots = [
+              { label: '8:00 - 9:00', start: '08:00 AM', end: '09:00 AM' },
+              { label: '9:00 - 10:00', start: '09:00 AM', end: '10:00 AM' },
+              { label: '10:00 - 10:30', start: '10:00 AM', end: '10:30 AM', isBreak: true, name: 'Tea Break' },
+              { label: '10:30 - 11:30', start: '10:30 AM', end: '11:30 AM' },
+              { label: '11:30 - 12:30', start: '11:30 AM', end: '12:30 PM' },
+              { label: '12:30 - 1:30', start: '12:30 PM', end: '01:30 PM', isBreak: true, name: 'Lunch Break' },
+              { label: '1:30 - 2:30', start: '01:30 PM', end: '02:30 PM' },
+              { label: '2:30 - 3:30', start: '02:30 PM', end: '03:30 PM' },
+              { label: '3:30 - 4:30', start: '03:30 PM', end: '04:30 PM' }
+            ];
 
-                    {/* Subject Detail info */}
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="font-semibold text-sm text-gray-900 line-clamp-1">{slot.subject_name}</h4>
-                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-200 text-[8px] font-bold font-mono">
-                          <MapPin className="h-2 w-2" />
-                          {slot.classroom_code}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500 font-semibold line-clamp-1">Classroom: {slot.classroom_name}</p>
-                    </div>
+            const activeDays = daysOfWeekList.filter(day => 
+              day !== 'Saturday' || timetables.some(t => t.day_of_week === 'Saturday')
+            );
 
+            return (
+              <table className="w-full text-xs text-left border-collapse bg-white">
+                <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase font-bold text-[9px] tracking-widest">
+                  <tr>
+                    <th className="py-3 px-4 border-r border-gray-200 bg-gray-100/50 w-24 text-center">Time & Day</th>
+                    {standardSlots.map((slot, index) => (
+                      <th key={index} className={`py-3 px-4 border-r border-gray-200 text-center ${slot.isBreak ? 'w-12 bg-gray-100/50' : 'min-w-[120px] whitespace-nowrap'}`}>
+                        {slot.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {activeDays.map((day, dayIndex) => {
+                    const skipSlots = new Set();
+                    return (
+                      <tr key={day} className="hover:bg-gray-50/30 transition-colors">
+                        <td className="py-4 px-4 border-r border-gray-200 font-extrabold text-gray-700 bg-gray-50/50 text-center uppercase tracking-wider text-[10px]">
+                          {day.substring(0, 3)}
+                        </td>
+                        {standardSlots.map((slot, index) => {
+                          if (skipSlots.has(index)) return null;
 
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+                          if (slot.isBreak) {
+                            if (dayIndex === 0) {
+                              return (
+                                <td key={index} rowSpan={activeDays.length} className="p-2 border-r border-gray-200 text-center bg-gray-50/80">
+                                  <div className="flex items-center justify-center h-full min-h-[100px]">
+                                    <span className="text-gray-400 font-bold uppercase tracking-widest text-xs rotate-180" style={{ writingMode: 'vertical-rl' }}>{slot.name}</span>
+                                  </div>
+                                </td>
+                              );
+                            } else {
+                              return null;
+                            }
+                          }
+
+                          const classStartingHere = timetables.find(t => t.day_of_week === day && t.start_time === slot.start);
+                          let colSpan = 1;
+                          
+                          if (classStartingHere) {
+                            const classEnd = parseTime(classStartingHere.end_time);
+                            for (let i = index + 1; i < standardSlots.length; i++) {
+                              if (!standardSlots[i].isBreak && parseTime(standardSlots[i].start) < classEnd) {
+                                colSpan++;
+                                skipSlots.add(i);
+                              } else if (standardSlots[i].isBreak && parseTime(standardSlots[i].end) <= classEnd) {
+                                break;
+                              } else {
+                                break;
+                              }
+                            }
+                          }
+
+                          return (
+                            <td key={index} colSpan={colSpan} className="p-2 border-r border-gray-200 text-center relative h-full">
+                              {classStartingHere ? (
+                                <div 
+                                  onClick={() => handleJoinRoom(classStartingHere.classroom_code)}
+                                  className="bg-indigo-50/60 rounded-md p-2.5 border border-indigo-100/80 flex flex-col items-center justify-center gap-1.5 h-full hover:border-indigo-300 hover:shadow-sm transition-all hover:-translate-y-0.5 cursor-pointer group"
+                                >
+                                  <span className="font-bold text-indigo-700 text-xs leading-tight group-hover:text-indigo-800 transition-colors">{classStartingHere.subject_name}</span>
+                                  <div className="flex flex-col items-center gap-1 mt-0.5">
+                                    <div className="flex items-center gap-1.5 text-[9px] font-bold tracking-wide">
+                                      <span className="bg-white px-1.5 py-0.5 rounded text-gray-600 border border-gray-200 shadow-sm inline-flex items-center gap-1">
+                                        <MapPin className="h-2 w-2" />
+                                        {classStartingHere.classroom_code}
+                                      </span>
+                                    </div>
+                                    <span className="text-gray-500 text-[9px] font-semibold line-clamp-1">{classStartingHere.classroom_name}</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-center h-full min-h-[60px] opacity-0 hover:opacity-100 transition-opacity">
+                                  <span className="text-gray-300 text-[10px] font-semibold uppercase tracking-wider">Free</span>
+                                </div>
+                              )}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            );
+          })()}
         </div>
       )}
 

@@ -75,7 +75,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const signup = async (name, email, password, role, section) => {
+  const signup = async (name, email, password, role, section, department, year, semester) => {
     try {
       // Map frontend roles to backend role strings
       const roleMap = {
@@ -93,7 +93,10 @@ export const AuthProvider = ({ children }) => {
           email: email, 
           password: password, 
           role_name: roleMap[role] || 'Student',
-          section: role === 'student' ? section : null
+          year: role === 'student' ? parseInt(year) : null,
+          semester: role === 'student' ? parseInt(semester) : null,
+          section: role === 'student' ? section : null,
+          department: department ? department.toUpperCase() : null
         }),
       });
       const data = await response.json();

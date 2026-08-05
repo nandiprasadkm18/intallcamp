@@ -9,7 +9,10 @@ const AuthPage = ({ onBackToLanding }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [section, setSection] = useState('7th Sem A');
+  const [department, setDepartment] = useState('CSE');
+  const [section, setSection] = useState('A');
+  const [year, setYear] = useState('1');
+  const [semester, setSemester] = useState('1');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,7 +26,7 @@ const AuthPage = ({ onBackToLanding }) => {
       if (isLogin) {
         await login(email, password);
       } else {
-        await signup(name, email, password, role, section);
+        await signup(name, email, password, role, section, department, year, semester);
       }
     } catch (err) {
       setError(err.message || 'An error occurred during authentication');
@@ -113,20 +116,67 @@ const AuthPage = ({ onBackToLanding }) => {
               </div>
             )}
 
-            {/* Section (Only for Student Register) */}
-            {!isLogin && role === 'student' && (
+            {/* Department (Only for Student and Teacher Register) */}
+            {!isLogin && (role === 'student' || role === 'teacher') && (
               <div>
-                <label className="block text-xs font-semibold uppercase text-gray-600 tracking-wider mb-1.5">Section</label>
+                <label className="block text-xs font-semibold uppercase text-gray-600 tracking-wider mb-1.5">Department</label>
                 <select
-                  value={section}
-                  onChange={(e) => setSection(e.target.value)}
+                  value={department}
+                  onChange={(e) => {
+                    const newDept = e.target.value;
+                    setDepartment(newDept);
+                    // Reset section if not available in new department
+                    if (newDept === 'ME' || newDept === 'CE') {
+                      setSection('A');
+                    } else if (newDept === 'ECE' && (section === 'C' || section === 'D')) {
+                      setSection('A');
+                    }
+                  }}
                   className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-colors"
                 >
-                  <option value="7th Sem A">7th Sem A</option>
-                  <option value="7th Sem B">7th Sem B</option>
-                  <option value="7th Sem C">7th Sem C</option>
-                  <option value="7th Sem D">7th Sem D</option>
+                  <option value="CSE">CSE</option>
+                  <option value="ECE">ECE</option>
+                  <option value="ME">ME</option>
+                  <option value="CE">CE</option>
                 </select>
+              </div>
+            )}
+            
+            {/* Year, Semester, Section (Only for Student Register) */}
+            {!isLogin && role === 'student' && (
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-gray-600 tracking-wider mb-1.5">Year</label>
+                  <select
+                    value={year}
+                    onChange={(e) => setYear(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-lg px-2 py-2.5 text-sm text-gray-900 focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-colors"
+                  >
+                    {[1,2,3,4].map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-gray-600 tracking-wider mb-1.5">Sem</label>
+                  <select
+                    value={semester}
+                    onChange={(e) => setSemester(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-lg px-2 py-2.5 text-sm text-gray-900 focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-colors"
+                  >
+                    {[1,2,3,4,5,6,7,8].map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-gray-600 tracking-wider mb-1.5">Section</label>
+                  <select
+                    value={section}
+                    onChange={(e) => setSection(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-lg px-2 py-2.5 text-sm text-gray-900 focus:outline-none focus:border-black focus:ring-1 focus:ring-black transition-colors"
+                  >
+                    {department === 'CSE' && ['A','B','C','D'].map(s => <option key={s} value={s}>{s}</option>)}
+                    {department === 'ECE' && ['A','B'].map(s => <option key={s} value={s}>{s}</option>)}
+                    {(department === 'ME' || department === 'CE') && <option value="A">A</option>}
+                  </select>
+                </div>
               </div>
             )}
 

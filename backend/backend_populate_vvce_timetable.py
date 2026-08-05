@@ -47,7 +47,7 @@ def populate_vvce_timetable():
         
         rooms_map = {}
         for c in courses:
-            room = db.query(Classroom).filter(Classroom.code == c["code"]).first()
+            room = db.query(Classroom).join(Course).filter(Course.code == c["code"]).first()
             if not room:
                 print(f"Creating subject room: {c['code']} - {c['name']}")
                 room = Classroom(

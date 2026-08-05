@@ -51,7 +51,10 @@ def login_access_token(
             "full_name": user.full_name,
             "role": role.name if role else "User",
             "college_id": user.college_id,
+            "year": user.year,
+            "semester": user.semester,
             "section": user.section,
+            "department": user.department,
             "phone": user.phone
         }
     }
@@ -72,6 +75,9 @@ def get_me(
         "full_name": current_user.full_name,
         "role": role.name if role else "User",
         "college_id": current_user.college_id,
+        "year": current_user.year,
+        "semester": current_user.semester,
         "section": current_user.section,
+        "department": current_user.department,
         "phone": current_user.phone
     }

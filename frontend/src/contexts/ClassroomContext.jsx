@@ -290,15 +290,36 @@ export const ClassroomProvider = ({ children }) => {
     }
   };
 
-  const uploadResource = async (title, file, targetSection = null, classroomCode = null) => {
+  const fetchGlobalResources = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/GLOBAL/resources`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setResources(data);
+      }
+    } catch (error) {
+      console.error("Error fetching global resources:", error);
+    }
+  };
+
+  const uploadResource = async (title, file, targetFilters = {}, classroomCode = null) => {
     const targetCode = classroomCode || activeClassroom?.code;
     if (!targetCode || !file) return;
     try {
       const formData = new FormData();
       formData.append("title", title);
       formData.append("file", file);
-      if (targetSection && targetSection !== "All Sections") {
-        formData.append("target_section", targetSection);
+      
+      if (targetFilters.year) formData.append("target_year", targetFilters.year);
+      if (targetFilters.department && targetFilters.department !== "All") formData.append("target_department", targetFilters.department);
+      if (targetFilters.semester) formData.append("target_semester", targetFilters.semester);
+      if (targetFilters.className && targetFilters.className !== "All") formData.append("target_class", targetFilters.className);
+      if (targetFilters.section && targetFilters.section !== "All Sections" && targetFilters.section !== "All") {
+        formData.append("target_section", targetFilters.section);
       }
 
       const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${targetCode}/resources`, {
@@ -343,6 +364,24 @@ export const ClassroomProvider = ({ children }) => {
       }
     } catch (error) {
       console.error("Error downloading resource:", error);
+    }
+  };
+
+  const deleteResource = async (id) => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/resources/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        setResources(prev => prev.filter(r => r.id !== id));
+      } else {
+        console.error("Failed to delete resource");
+      }
+    } catch (error) {
+      console.error("Error deleting resource:", error);
     }
   };
 
@@ -403,6 +442,8 @@ export const ClassroomProvider = ({ children }) => {
       broadcastAlert,
       uploadResource,
       downloadResource,
+      deleteResource,
+      fetchGlobalResources,
       simulateAttendance,
       startAudioStream,
       stopAudioStream

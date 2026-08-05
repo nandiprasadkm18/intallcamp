@@ -111,7 +111,8 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, user_name: st
                 # Save to DB
                 db = SessionLocal()
                 try:
-                    classroom = db.query(Classroom).filter(Classroom.code == room_code).first()
+                    from app.models.academic import Course
+                    classroom = db.query(Classroom).join(Course).filter(Course.code == room_code).first()
                     if classroom:
                         record = TranscriptRecord(
                             classroom_id=classroom.id,

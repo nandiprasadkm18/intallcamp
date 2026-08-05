@@ -49,8 +49,29 @@ class Course(Base):
 
 class ClassroomResource(Base):
     __tablename__ = "classroom_resources"
+    id = Column(Integer, primary_key=True, index=True)
     classroom_code = Column(String, index=True, nullable=False)
     title = Column(String, nullable=False)
     file_type = Column(String, nullable=False)
     file_size = Column(String, nullable=False)
-    target_section = Column(String, nullable=True) # e.g., '7th Sem A', or null for 'All Sections'
+    
+    target_year = Column(Integer, nullable=True)
+    target_department = Column(String, nullable=True)
+    target_semester = Column(Integer, nullable=True)
+    target_class = Column(String, nullable=True)
+    target_section = Column(String, nullable=True) # e.g., 'A', 'B', or null for 'All Sections'
+
+class Timetable(Base):
+    __tablename__ = "timetables"
+    id = Column(Integer, primary_key=True, index=True)
+    classroom_id = Column(Integer, ForeignKey("classrooms.id"))
+    day_of_week = Column(String, nullable=False)
+    start_time = Column(String, nullable=False)
+    end_time = Column(String, nullable=False)
+    subject_name = Column(String, nullable=False)
+    year = Column(Integer, nullable=False)
+    semester = Column(Integer, nullable=False)
+    department = Column(String, nullable=False)
+    section = Column(String, nullable=False)
+    
+    classroom = relationship("Classroom")

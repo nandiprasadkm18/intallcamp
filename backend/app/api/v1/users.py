@@ -16,7 +16,10 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str
     role_name: str = "Student" # Default to Student, can be 'Teacher' or 'College Admin'
+    year: Optional[int] = None
+    semester: Optional[int] = None
     section: Optional[str] = None
+    department: Optional[str] = None
 
 class UserResponse(BaseModel):
     id: int
@@ -25,7 +28,10 @@ class UserResponse(BaseModel):
     role_id: int
     college_id: Optional[int] = None
     phone: Optional[str] = None
+    year: Optional[int] = None
+    semester: Optional[int] = None
     section: Optional[str] = None
+    department: Optional[str] = None
     is_active: bool
     class Config:
         from_attributes = True
@@ -84,7 +90,10 @@ def register_user(user_in: UserRegister, db: Session = Depends(get_db)):
         role_id=role.id,
         college_id=college_id,
         is_active=True,
-        section=user_in.section if role.name == 'Student' else None
+        year=user_in.year if role.name == 'Student' else None,
+        semester=user_in.semester if role.name == 'Student' else None,
+        section=user_in.section if role.name == 'Student' else None,
+        department=user_in.department
     )
     
     db.add(new_user)

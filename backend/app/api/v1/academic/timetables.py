@@ -1,753 +1,111 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends, HTTPException
+from sqlalchemy.orm import Session
 from typing import List, Optional
+
+from app.api.dependencies import get_db
+from app.models.academic import Timetable
+from app.api.dependencies import get_current_user
+from app.models.activity import Classroom
+from app.models.user import User
+from app.schemas.academic import TimetableCreate, TimetableResponse
 
 router = APIRouter()
 
-TIMETABLES = [
-    {
-        "id": "7th_sem_a_1",
-        "day_of_week": "Monday",
-        "start_time": "08:00 AM",
-        "end_time": "09:00 AM",
-        "subject_name": "UI/UX Design",
-        "classroom_code": "BCSUI702",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_2",
-        "day_of_week": "Monday",
-        "start_time": "09:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "Storage Area Networks",
-        "classroom_code": "BCSSA714",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_3",
-        "day_of_week": "Monday",
-        "start_time": "10:30 AM",
-        "end_time": "11:30 AM",
-        "subject_name": "NoSQL Database",
-        "classroom_code": "BCSNS701",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_4",
-        "day_of_week": "Monday",
-        "start_time": "11:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "PE-III BDA/CSF",
-        "classroom_code": "PE-III",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_5",
-        "day_of_week": "Tuesday",
-        "start_time": "08:00 AM",
-        "end_time": "09:00 AM",
-        "subject_name": "NoSQL Database",
-        "classroom_code": "BCSNS701",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_6",
-        "day_of_week": "Tuesday",
-        "start_time": "09:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "PE-III BDA/CSF",
-        "classroom_code": "PE-III",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_7",
-        "day_of_week": "Tuesday",
-        "start_time": "10:30 AM",
-        "end_time": "11:30 AM",
-        "subject_name": "Storage Area Networks",
-        "classroom_code": "BCSSA714",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_8",
-        "day_of_week": "Tuesday",
-        "start_time": "11:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "UI/UX Design",
-        "classroom_code": "BCSUI702",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_9",
-        "day_of_week": "Wednesday",
-        "start_time": "08:00 AM",
-        "end_time": "09:00 AM",
-        "subject_name": "Storage Area Networks",
-        "classroom_code": "BCSSA714",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_10",
-        "day_of_week": "Wednesday",
-        "start_time": "09:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "NoSQL Database",
-        "classroom_code": "BCSNS701",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_11",
-        "day_of_week": "Wednesday",
-        "start_time": "10:30 AM",
-        "end_time": "11:30 AM",
-        "subject_name": "PE-III BDA/CSF",
-        "classroom_code": "PE-III",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_12",
-        "day_of_week": "Wednesday",
-        "start_time": "11:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "UI/UX Design",
-        "classroom_code": "BCSUI702",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_13",
-        "day_of_week": "Wednesday",
-        "start_time": "01:30 PM",
-        "end_time": "03:30 PM",
-        "subject_name": "NoSQL Database Lab",
-        "classroom_code": "BCSNS701",
-        "classroom_name": "M301",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_14",
-        "day_of_week": "Thursday",
-        "start_time": "08:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_15",
-        "day_of_week": "Thursday",
-        "start_time": "10:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_16",
-        "day_of_week": "Thursday",
-        "start_time": "01:30 PM",
-        "end_time": "04:30 PM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_17",
-        "day_of_week": "Friday",
-        "start_time": "08:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_18",
-        "day_of_week": "Friday",
-        "start_time": "10:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_a_19",
-        "day_of_week": "Friday",
-        "start_time": "01:30 PM",
-        "end_time": "04:30 PM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M408",
-        "section": "7th Sem A"
-    },
-    {
-        "id": "7th_sem_b_1",
-        "day_of_week": "Monday",
-        "start_time": "08:00 AM",
-        "end_time": "09:00 AM",
-        "subject_name": "UI/UX Design",
-        "classroom_code": "BCSUI702",
-        "classroom_name": "Classroom-M409",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_b_2",
-        "day_of_week": "Monday",
-        "start_time": "09:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "NoSQL Database",
-        "classroom_code": "BCSNS701",
-        "classroom_name": "Classroom-M409",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_b_3",
-        "day_of_week": "Monday",
-        "start_time": "10:30 AM",
-        "end_time": "11:30 AM",
-        "subject_name": "Storage Area Networks",
-        "classroom_code": "BCSSA714",
-        "classroom_name": "Classroom-M409",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_b_4",
-        "day_of_week": "Monday",
-        "start_time": "11:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "PE-III BDA/CSF",
-        "classroom_code": "PE-III",
-        "classroom_name": "Classroom-M409",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_b_5",
-        "day_of_week": "Tuesday",
-        "start_time": "08:00 AM",
-        "end_time": "09:00 AM",
-        "subject_name": "Storage Area Networks",
-        "classroom_code": "BCSSA714",
-        "classroom_name": "Classroom-M409",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_b_6",
-        "day_of_week": "Tuesday",
-        "start_time": "09:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "PE-III BDA/CSF",
-        "classroom_code": "PE-III",
-        "classroom_name": "Classroom-M409",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_b_7",
-        "day_of_week": "Tuesday",
-        "start_time": "10:30 AM",
-        "end_time": "11:30 AM",
-        "subject_name": "UI/UX Design",
-        "classroom_code": "BCSUI702",
-        "classroom_name": "Classroom-M409",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_b_8",
-        "day_of_week": "Tuesday",
-        "start_time": "11:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "NoSQL Database",
-        "classroom_code": "BCSNS701",
-        "classroom_name": "Classroom-M409",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_b_9",
-        "day_of_week": "Wednesday",
-        "start_time": "08:00 AM",
-        "end_time": "09:00 AM",
-        "subject_name": "NoSQL Database",
-        "classroom_code": "BCSNS701",
-        "classroom_name": "Classroom-M409",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_b_10",
-        "day_of_week": "Wednesday",
-        "start_time": "09:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "UI/UX Design",
-        "classroom_code": "BCSUI702",
-        "classroom_name": "Classroom-M409",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_b_11",
-        "day_of_week": "Wednesday",
-        "start_time": "10:30 AM",
-        "end_time": "11:30 AM",
-        "subject_name": "PE-III BDA/CSF",
-        "classroom_code": "PE-III",
-        "classroom_name": "Classroom-M409",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_b_12",
-        "day_of_week": "Wednesday",
-        "start_time": "11:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "Storage Area Networks",
-        "classroom_code": "BCSSA714",
-        "classroom_name": "Classroom-M409",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_b_13",
-        "day_of_week": "Wednesday",
-        "start_time": "01:30 PM",
-        "end_time": "03:30 PM",
-        "subject_name": "NoSQL Database Lab",
-        "classroom_code": "BCSNS701",
-        "classroom_name": "M302",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_b_14",
-        "day_of_week": "Thursday",
-        "start_time": "08:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M409",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_b_15",
-        "day_of_week": "Thursday",
-        "start_time": "10:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M409",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_b_16",
-        "day_of_week": "Friday",
-        "start_time": "08:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M409",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_b_17",
-        "day_of_week": "Friday",
-        "start_time": "10:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M409",
-        "section": "7th Sem B"
-    },
-    {
-        "id": "7th_sem_c_1",
-        "day_of_week": "Monday",
-        "start_time": "08:00 AM",
-        "end_time": "09:00 AM",
-        "subject_name": "UI/UX Design",
-        "classroom_code": "BCSUI702",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_2",
-        "day_of_week": "Monday",
-        "start_time": "09:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "Storage Area Networks",
-        "classroom_code": "BCSSA714",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_3",
-        "day_of_week": "Monday",
-        "start_time": "10:30 AM",
-        "end_time": "11:30 AM",
-        "subject_name": "NoSQL Database",
-        "classroom_code": "BCSNS701",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_4",
-        "day_of_week": "Monday",
-        "start_time": "11:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "PE-III BDA/CSF",
-        "classroom_code": "PE-III",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_5",
-        "day_of_week": "Tuesday",
-        "start_time": "08:00 AM",
-        "end_time": "09:00 AM",
-        "subject_name": "UI/UX Design",
-        "classroom_code": "BCSUI702",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_6",
-        "day_of_week": "Tuesday",
-        "start_time": "09:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "PE-III BDA/CSF",
-        "classroom_code": "PE-III",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_7",
-        "day_of_week": "Tuesday",
-        "start_time": "10:30 AM",
-        "end_time": "11:30 AM",
-        "subject_name": "Storage Area Networks",
-        "classroom_code": "BCSSA714",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_8",
-        "day_of_week": "Tuesday",
-        "start_time": "11:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "NoSQL Database",
-        "classroom_code": "BCSNS701",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_9",
-        "day_of_week": "Tuesday",
-        "start_time": "01:30 PM",
-        "end_time": "03:30 PM",
-        "subject_name": "NoSQL Database Lab",
-        "classroom_code": "BCSNS701",
-        "classroom_name": "M301",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_10",
-        "day_of_week": "Wednesday",
-        "start_time": "08:00 AM",
-        "end_time": "09:00 AM",
-        "subject_name": "Storage Area Networks",
-        "classroom_code": "BCSSA714",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_11",
-        "day_of_week": "Wednesday",
-        "start_time": "09:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "UI/UX Design",
-        "classroom_code": "BCSUI702",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_12",
-        "day_of_week": "Wednesday",
-        "start_time": "10:30 AM",
-        "end_time": "11:30 AM",
-        "subject_name": "PE-III BDA/CSF",
-        "classroom_code": "PE-III",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_13",
-        "day_of_week": "Wednesday",
-        "start_time": "11:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "NoSQL Database",
-        "classroom_code": "BCSNS701",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_14",
-        "day_of_week": "Thursday",
-        "start_time": "08:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_15",
-        "day_of_week": "Thursday",
-        "start_time": "10:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_16",
-        "day_of_week": "Thursday",
-        "start_time": "01:30 PM",
-        "end_time": "04:30 PM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_17",
-        "day_of_week": "Friday",
-        "start_time": "08:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_18",
-        "day_of_week": "Friday",
-        "start_time": "10:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_c_19",
-        "day_of_week": "Friday",
-        "start_time": "01:30 PM",
-        "end_time": "04:30 PM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M410",
-        "section": "7th Sem C"
-    },
-    {
-        "id": "7th_sem_d_1",
-        "day_of_week": "Monday",
-        "start_time": "08:00 AM",
-        "end_time": "09:00 AM",
-        "subject_name": "UI/UX Design",
-        "classroom_code": "BCSUI702",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_2",
-        "day_of_week": "Monday",
-        "start_time": "09:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "Storage Area Networks",
-        "classroom_code": "BCSSA714",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_3",
-        "day_of_week": "Monday",
-        "start_time": "10:30 AM",
-        "end_time": "11:30 AM",
-        "subject_name": "NoSQL Database",
-        "classroom_code": "BCSNS701",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_4",
-        "day_of_week": "Monday",
-        "start_time": "11:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "PE-III BDA/CSF",
-        "classroom_code": "PE-III",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_5",
-        "day_of_week": "Tuesday",
-        "start_time": "08:00 AM",
-        "end_time": "09:00 AM",
-        "subject_name": "NoSQL Database",
-        "classroom_code": "BCSNS701",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_6",
-        "day_of_week": "Tuesday",
-        "start_time": "09:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "PE-III BDA/CSF",
-        "classroom_code": "PE-III",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_7",
-        "day_of_week": "Tuesday",
-        "start_time": "10:30 AM",
-        "end_time": "11:30 AM",
-        "subject_name": "UI/UX Design",
-        "classroom_code": "BCSUI702",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_8",
-        "day_of_week": "Tuesday",
-        "start_time": "11:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "Storage Area Networks",
-        "classroom_code": "BCSSA714",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_9",
-        "day_of_week": "Tuesday",
-        "start_time": "01:30 PM",
-        "end_time": "03:30 PM",
-        "subject_name": "NoSQL Database Lab",
-        "classroom_code": "BCSNS701",
-        "classroom_name": "M302",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_10",
-        "day_of_week": "Wednesday",
-        "start_time": "08:00 AM",
-        "end_time": "09:00 AM",
-        "subject_name": "Storage Area Networks",
-        "classroom_code": "BCSSA714",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_11",
-        "day_of_week": "Wednesday",
-        "start_time": "09:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "NoSQL Database",
-        "classroom_code": "BCSNS701",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_12",
-        "day_of_week": "Wednesday",
-        "start_time": "10:30 AM",
-        "end_time": "11:30 AM",
-        "subject_name": "PE-III BDA/CSF",
-        "classroom_code": "PE-III",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_13",
-        "day_of_week": "Wednesday",
-        "start_time": "11:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "UI/UX Design",
-        "classroom_code": "BCSUI702",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_14",
-        "day_of_week": "Thursday",
-        "start_time": "08:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_15",
-        "day_of_week": "Thursday",
-        "start_time": "10:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_16",
-        "day_of_week": "Thursday",
-        "start_time": "02:30 PM",
-        "end_time": "04:30 PM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_17",
-        "day_of_week": "Friday",
-        "start_time": "08:00 AM",
-        "end_time": "10:00 AM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_18",
-        "day_of_week": "Friday",
-        "start_time": "10:30 AM",
-        "end_time": "12:30 PM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    },
-    {
-        "id": "7th_sem_d_19",
-        "day_of_week": "Friday",
-        "start_time": "02:30 PM",
-        "end_time": "04:30 PM",
-        "subject_name": "Major Project (Phase-I)",
-        "classroom_code": "BCSPR785",
-        "classroom_name": "Classroom-M411",
-        "section": "7th Sem D"
-    }
-]
+@router.get("", response_model=List[TimetableResponse])
+def get_timetables(
+    section: Optional[str] = Query(None),
+    year: Optional[int] = Query(None),
+    semester: Optional[int] = Query(None),
+    department: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Timetable)
+    
+    if year is not None:
+        query = query.filter(Timetable.year == year)
+    if semester is not None:
+        query = query.filter(Timetable.semester == semester)
+    if department is not None:
+        query = query.filter(Timetable.department == department)
+    if section is not None:
+        query = query.filter(Timetable.section == section)
+        
+    schedules = query.all()
+    
+    res = []
+    for s in schedules:
+        # Join classroom code via Course relationship (from Classroom)
+        classroom_code = s.classroom.course.code if s.classroom and s.classroom.course else "Unknown"
+        classroom_name = s.classroom.course.name if s.classroom and s.classroom.course else "Unknown"
+        
+        sem_map = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th", 6: "6th", 7: "7th", 8: "8th"}
+        sem_str = sem_map.get(s.semester, f"{s.semester}th")
+        
+        # To maintain compatibility with UI Target Class rendering format
+        res_section_string = f"{sem_str} Sem {s.section}"
 
-@router.get("")
-def get_timetables(section: Optional[str] = Query(None)):
-    if section:
-        return [t for t in TIMETABLES if t.get("section") == section]
-    return TIMETABLES
+        res.append(TimetableResponse(
+            id=s.id,
+            classroom_id=s.classroom_id,
+            day_of_week=s.day_of_week,
+            start_time=s.start_time,
+            end_time=s.end_time,
+            subject_name=s.subject_name,
+            year=s.year,
+            semester=s.semester,
+            department=s.department,
+            section=res_section_string, # Send this so the UI renders it cleanly
+            classroom_code=classroom_code,
+            classroom_name=classroom_name
+        ))
+    return res
+
+@router.post("", response_model=TimetableResponse)
+def create_timetable(
+    data: TimetableCreate, 
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    # Authorization checks could be expanded here
+    if user.role != "College Admin" and user.role != "Super Admin":
+        raise HTTPException(status_code=403, detail="Only admins can schedule timetables")
+        
+    # Verify classroom exists
+    classroom = db.query(Classroom).filter(Classroom.id == data.classroom_id).first()
+    if not classroom:
+        raise HTTPException(status_code=404, detail="Selected classroom does not exist")
+        
+    new_timetable = Timetable(
+        classroom_id=data.classroom_id,
+        day_of_week=data.day_of_week,
+        start_time=data.start_time,
+        end_time=data.end_time,
+        subject_name=data.subject_name,
+        year=data.year,
+        semester=data.semester,
+        department=data.department,
+        section=data.section
+    )
+    
+    db.add(new_timetable)
+    db.commit()
+    db.refresh(new_timetable)
+    
+    sem_map = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th", 6: "6th", 7: "7th", 8: "8th"}
+    sem_str = sem_map.get(new_timetable.semester, f"{new_timetable.semester}th")
+    res_section_string = f"{sem_str} Sem {new_timetable.section}"
+    
+    return TimetableResponse(
+        id=new_timetable.id,
+        classroom_id=new_timetable.classroom_id,
+        day_of_week=new_timetable.day_of_week,
+        start_time=new_timetable.start_time,
+        end_time=new_timetable.end_time,
+        subject_name=new_timetable.subject_name,
+        year=new_timetable.year,
+        semester=new_timetable.semester,
+        department=new_timetable.department,
+        section=res_section_string,
+        classroom_code=classroom.course.code if classroom.course else "Unknown",
+        classroom_name=classroom.course.name if classroom.course else "Unknown"
+    )

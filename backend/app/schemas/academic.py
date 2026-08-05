@@ -31,3 +31,24 @@ class Course(CourseBase):
 
     class Config:
         from_attributes = True
+
+
+# Timetable Schemas
+class TimetableCreate(BaseModel):
+    classroom_id: int
+    day_of_week: str
+    start_time: str
+    end_time: str
+    subject_name: str
+    year: int
+    semester: int
+    department: str
+    section: str
+
+class TimetableResponse(TimetableCreate):
+    id: int
+    classroom_code: Optional[str] = None
+    classroom_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True

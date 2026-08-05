@@ -303,9 +303,12 @@ const LiveClassroom = ({ setCurrentPage }) => {
           {isTeacher && (
             <button
               onClick={() => { 
-                startLiveClassroomSession(activeClassroom.code, false);
-                leaveClassroom(); 
-                navigate('/dashboard'); 
+                const confirmEnd = window.confirm("Are you sure you want to end the class and store the transcription to Cloudflare?");
+                if (confirmEnd) {
+                  startLiveClassroomSession(activeClassroom.code, false);
+                  leaveClassroom(); 
+                  navigate('/dashboard'); 
+                }
               }}
               className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors shadow-sm"
             >

@@ -166,13 +166,27 @@ def process_end_of_class(db: Session, classroom_code: str):
         
         from app.models.activity import LectureSummary, Classroom
         from app.services.ai_pipeline import process_summary_background
+        from app.services.storage import upload_file_to_r2
+        import io
         
-        classroom = db.query(Classroom).filter(Classroom.code == classroom_code).first()
+        classroom = db.query(Classroom).join(Course).filter(Course.code == classroom_code).first()
         if classroom:
+            timestamp_str = str(int(time.time()))
+            transcript_key = f"transcripts/{classroom_code}_{timestamp_str}.txt"
+            summary_key = f"summaries/{classroom_code}_{timestamp_str}.md"
+            
+            try:
+                upload_file_to_r2(io.BytesIO(transcript_text.encode('utf-8')), transcript_key)
+                upload_file_to_r2(io.BytesIO(summary.encode('utf-8')), summary_key)
+            except Exception as e:
+                print(f"Failed to upload to R2: {e}")
+                
             new_summary = LectureSummary(
                 classroom_id=classroom.id,
                 summary_text=summary,
-                created_at=datetime.datetime.now().isoformat()
+                created_at=datetime.datetime.now().isoformat(),
+                transcript_s3_key=transcript_key,
+                summary_s3_key=summary_key
             )
             db.add(new_summary)
             db.commit()
@@ -301,17 +315,46 @@ def get_records(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Fetch transcripts for the classroom
-    records = db.query(TranscriptRecord).all()
+    # Fetch LectureSummaries for the classroom (these contain the R2 keys)
+    from app.models.activity import LectureSummary, Classroom
+    classroom = db.query(Classroom).join(Course).filter(Course.code == code).first()
+    if not classroom:
+        return []
+        
+    records = db.query(LectureSummary).filter(LectureSummary.classroom_id == classroom.id).order_by(LectureSummary.id.desc()).all()
     results = []
     for r in records:
         results.append({
             "id": r.id,
-            "text": r.text,
-            "speaker_name": r.speaker_name,
-            "timestamp": r.timestamp
+            "title": f"Live Session {r.id}",
+            "date": r.created_at,
+            "duration": "1h 0m", # Mocked duration
+            "transcript_key": r.transcript_s3_key,
+            "summary_key": r.summary_s3_key,
+            "summary_text_fallback": r.summary_text # Keep in case R2 fetch fails
         })
     return results
+
+@router.get("/records/download")
+def download_record(
+    key: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from fastapi.responses import StreamingResponse
+    from app.services.storage import get_r2_file_stream
+    
+    try:
+        file_stream = get_r2_file_stream(key)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail="File not found on cloud storage")
+        
+    filename = key.split("/")[-1]
+    return StreamingResponse(
+        file_stream, 
+        media_type="application/octet-stream", 
+        headers={"Content-Disposition": f"inline; filename={filename}"}
+    )
 
 @router.post("/{code}/transcribe")
 async def transcribe_audio(
@@ -355,7 +398,7 @@ async def transcribe_audio(
             await manager.broadcast(json.dumps(payload), code)
             
             # Save to DB
-            classroom = db.query(Classroom).filter(Classroom.code == code).first()
+            classroom = db.query(Classroom).join(Course).filter(Course.code == code).first()
             if classroom:
                 new_record = TranscriptRecord(
                     classroom_id=classroom.id,

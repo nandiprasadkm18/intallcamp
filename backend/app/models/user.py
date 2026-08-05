@@ -35,7 +35,10 @@ class User(Base):
     
     is_active = Column(Boolean, default=True)
     last_login = Column(DateTime, nullable=True)
-    section = Column(String, nullable=True) # e.g., '7th Sem A'
+    year = Column(Integer, nullable=True) # e.g., 1, 2, 3, 4
+    semester = Column(Integer, nullable=True) # e.g., 1-8
+    section = Column(String, nullable=True) # e.g., 'A', 'B'
+    department = Column(String, nullable=True) # e.g., 'CSE', 'ECE', 'ME', 'CE'
 
     # Relationships
     college = relationship("College", back_populates="users")

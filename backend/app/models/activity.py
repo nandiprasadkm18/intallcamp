@@ -89,5 +89,7 @@ class LectureSummary(Base):
     classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=False)
     summary_text = Column(String, nullable=False)
     created_at = Column(String, nullable=False)
+    transcript_s3_key = Column(String, nullable=True)
+    summary_s3_key = Column(String, nullable=True)
     
     classroom = relationship("Classroom")

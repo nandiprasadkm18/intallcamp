@@ -2,6 +2,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from pydantic import BaseModel
 import os
 import shutil
@@ -18,6 +19,10 @@ class ResourceCreate(BaseModel):
     title: str
     file_type: str
     file_size: str
+    target_year: Optional[int] = None
+    target_department: Optional[str] = None
+    target_semester: Optional[int] = None
+    target_class: Optional[str] = None
     target_section: Optional[str] = None # null means all sections
 
 class ResourceResponse(BaseModel):
@@ -26,6 +31,10 @@ class ResourceResponse(BaseModel):
     title: str
     file_type: str
     file_size: str
+    target_year: Optional[int]
+    target_department: Optional[str]
+    target_semester: Optional[int]
+    target_class: Optional[str]
     target_section: Optional[str]
 
     class Config:
@@ -47,7 +56,14 @@ def get_classroom_resources(
     # Optional role check to filter by section for students
     if current_user.role and current_user.role.name == "Student":
         if current_user.section:
-            # Show resources for All Sections OR their specific section
+            # Verify constraints against user profile
+            if current_user.year:
+                query = query.filter((ClassroomResource.target_year == None) | (ClassroomResource.target_year == current_user.year))
+            if current_user.department:
+                query = query.filter((ClassroomResource.target_department == None) | (ClassroomResource.target_department == current_user.department))
+            if current_user.semester:
+                query = query.filter((ClassroomResource.target_semester == None) | (ClassroomResource.target_semester == current_user.semester))
+                
             query = query.filter(
                 (ClassroomResource.target_section == None) | 
                 (ClassroomResource.target_section == "All Sections") |
@@ -69,6 +85,10 @@ def create_classroom_resource(
     code: str,
     background_tasks: BackgroundTasks,
     title: str = Form(...),
+    target_year: Optional[int] = Form(None),
+    target_department: Optional[str] = Form(None),
+    target_semester: Optional[int] = Form(None),
+    target_class: Optional[str] = Form(None),
     target_section: Optional[str] = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -94,6 +114,10 @@ def create_classroom_resource(
         title=title,
         file_type=ext.upper(),
         file_size=size_mb,
+        target_year=target_year,
+        target_department=target_department,
+        target_semester=target_semester,
+        target_class=target_class,
         target_section=target_section
     )
     db.add(new_resource)
@@ -151,3 +175,33 @@ def download_resource(
         media_type="application/octet-stream", 
         headers={"Content-Disposition": f"attachment; filename={resource.title}.{ext}"}
     )
+
+@router.delete("/resources/{id}")
+def delete_resource(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role and current_user.role.name not in ["Teacher", "College Admin", "Super Admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized to delete resources")
+
+    resource = db.query(ClassroomResource).filter(ClassroomResource.id == id).first()
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+
+    from app.services.storage import delete_file_from_r2
+    ext = resource.file_type.lower()
+    object_name = f"resource_{id}.{ext}"
+    
+    # Delete from storage (R2 and fallback)
+    delete_file_from_r2(object_name)
+
+    # Delete dependent AI jobs and chunks
+    db.execute(text("DELETE FROM resource_chunks WHERE resource_id = :id"), {"id": id})
+    db.execute(text("DELETE FROM ai_job_statuses WHERE entity_type='resource' AND entity_id = :id"), {"id": id})
+
+    # Delete from DB
+    db.delete(resource)
+    db.commit()
+
+    return {"status": "success", "message": "Resource deleted successfully"}

@@ -24,6 +24,9 @@ class User(Base):
     role = Column(String, default="student")  # student, teacher, admin
     bio = Column(Text, nullable=True)
     avatar = Column(String, nullable=True)
+    year = Column(Integer, nullable=True) # e.g., 1, 2, 3, 4
+    semester = Column(Integer, nullable=True) # e.g., 1-8
+    department = Column(String, nullable=True) # e.g., 'CSE', 'ECE', 'ME', 'CE'
 
     classrooms = relationship("Classroom", back_populates="teacher")
     doubts = relationship("Doubt", back_populates="student")
@@ -115,6 +118,12 @@ class Timetable(Base):
     start_time = Column(String, nullable=False)
     end_time = Column(String, nullable=False)
     subject_name = Column(String, nullable=False)
+    
+    # Target Class filters
+    year = Column(Integer, nullable=False)
+    semester = Column(Integer, nullable=False)
+    department = Column(String, nullable=False)
+    section = Column(String, nullable=False)
 
     classroom = relationship("Classroom", back_populates="timetables")
 

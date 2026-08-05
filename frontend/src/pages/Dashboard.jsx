@@ -18,8 +18,11 @@ import {
   Plus,
   Trash2,
   Eye,
-  EyeOff
+  EyeOff,
+  Download
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
   AreaChart,
   Area,
@@ -76,13 +79,20 @@ const Dashboard = () => {
   const [adminMetrics, setAdminMetrics] = useState(null);
   const [adminActiveTab, setAdminActiveTab] = useState("overview");
   const [adminUserFilter, setAdminUserFilter] = useState("all");
+  const [adminDeptFilter, setAdminDeptFilter] = useState("all");
+  const [adminDirYearFilter, setAdminDirYearFilter] = useState("all");
+  const [adminDirSemFilter, setAdminDirSemFilter] = useState("all");
+  const [adminDirSecFilter, setAdminDirSecFilter] = useState("all");
 
   // Admin Create User form state
   const [adminUserEmail, setAdminUserEmail] = useState("");
   const [adminUserName, setAdminUserName] = useState("");
   const [adminUserPass, setAdminUserPass] = useState("");
   const [adminUserRole, setAdminUserRole] = useState("student");
-  const [adminUserSection, setAdminUserSection] = useState("7th Sem A");
+  const [adminUserDepartment, setAdminUserDepartment] = useState("CSE");
+  const [adminUserSection, setAdminUserSection] = useState("A");
+  const [adminUserYear, setAdminUserYear] = useState("1");
+  const [adminUserSemester, setAdminUserSemester] = useState("1");
   const [showAdminUserPass, setShowAdminUserPass] = useState(false);
 
   // Admin Create Department form state
@@ -93,17 +103,107 @@ const Dashboard = () => {
   const [mapRoomId, setMapRoomId] = useState("");
   const [mapTeacherId, setMapTeacherId] = useState("");
 
+  // Timetable Filters
+  const [ttFilterYear, setTtFilterYear] = useState("4");
+  const [ttFilterSem, setTtFilterSem] = useState("7");
+  const [ttFilterDept, setTtFilterDept] = useState("CSE");
+  const [ttFilterSection, setTtFilterSection] = useState("A");
+
   // Admin Create Timetable schedule form state
   const [schedRoomId, setSchedRoomId] = useState("");
   const [schedDay, setSchedDay] = useState("Monday");
   const [schedStart, setSchedStart] = useState("09:00");
   const [schedEnd, setSchedEnd] = useState("10:30");
   const [schedSubject, setSchedSubject] = useState("");
+  const [schedYear, setSchedYear] = useState("4");
+  const [schedSem, setSchedSem] = useState("7");
+  const [schedDept, setSchedDept] = useState("CSE");
+  const [schedSection, setSchedSection] = useState("A");
 
   // Platform announcements state
   const [announcements, setAnnouncements] = useState([]);
   const [annTitle, setAnnTitle] = useState("");
   const [annBody, setAnnBody] = useState("");
+
+  // Export Modal state
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFormat, setExportFormat] = useState('csv');
+  const [exportFields, setExportFields] = useState({
+    name: true,
+    email: true,
+    role: true,
+    department: true,
+    year: false,
+    semester: false,
+    section: false
+  });
+
+  const handleExportDirectory = () => {
+    const filteredToExport = adminUsers.filter(u => {
+      const roleName = (u.role?.name || u.role || "").toLowerCase();
+      const roleMatch = adminUserFilter === 'all' || roleName === adminUserFilter;
+      const deptMatch = adminDeptFilter === 'all' || u.department === adminDeptFilter;
+      
+      if (!roleMatch || !deptMatch) return false;
+      
+      if (roleName === 'student') {
+        if (adminDirYearFilter !== 'all' && u.year?.toString() !== adminDirYearFilter) return false;
+        if (adminDirSemFilter !== 'all' && u.semester?.toString() !== adminDirSemFilter) return false;
+        if (adminDirSecFilter !== 'all' && u.section !== adminDirSecFilter) return false;
+      }
+      return true;
+    });
+
+    if (filteredToExport.length === 0) {
+      alert("No users to export with current filters!");
+      return;
+    }
+
+    const headers = [];
+    const fieldsToExtract = [];
+
+    if (exportFields.name) { headers.push("Full Name"); fieldsToExtract.push(u => u.full_name || u.name || ""); }
+    if (exportFields.email) { headers.push("Email"); fieldsToExtract.push(u => u.email || ""); }
+    if (exportFields.role) { headers.push("Role"); fieldsToExtract.push(u => u.role?.name || u.role || ""); }
+    if (exportFields.department) { headers.push("Department"); fieldsToExtract.push(u => u.department || ""); }
+    if (exportFields.year) { headers.push("Year"); fieldsToExtract.push(u => u.year || ""); }
+    if (exportFields.semester) { headers.push("Semester"); fieldsToExtract.push(u => u.semester || ""); }
+    if (exportFields.section) { headers.push("Section"); fieldsToExtract.push(u => u.section || ""); }
+
+    const rows = filteredToExport.map(u => fieldsToExtract.map(extractor => extractor(u)));
+
+    if (exportFormat === 'csv') {
+      const csvContent = [
+        headers.join(","),
+        ...rows.map(r => r.map(v => `"${(v?.toString() || "").replace(/"/g, '""')}"`).join(","))
+      ].join("\n");
+      
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "intellicamp_user_directory.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else if (exportFormat === 'pdf') {
+      const doc = new jsPDF();
+      doc.text("IntelliCamp User Directory", 14, 15);
+      doc.text(`Filters: Role (${adminUserFilter}), Dept (${adminDeptFilter})`, 14, 22);
+      
+      autoTable(doc, {
+        head: [headers],
+        body: rows,
+        startY: 30,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [79, 70, 229] }
+      });
+      
+      doc.save("intellicamp_user_directory.pdf");
+    }
+
+    setShowExportModal(false);
+  };
 
   const loadRooms = async () => {
     try {
@@ -144,15 +244,28 @@ const Dashboard = () => {
 
   const loadTimetables = async () => {
     try {
-      const url = user?.section
-        ? `http://127.0.0.1:8000/api/admin/timetables?section=${encodeURIComponent(user.section)}`
-        : 'http://127.0.0.1:8000/api/admin/timetables';
-      const resSchedules = await fetch(url);
+      let url = 'http://127.0.0.1:8000/api/admin/timetables';
+      if (user?.role === 'College Admin') {
+        url += `?year=${ttFilterYear}&semester=${ttFilterSem}&department=${ttFilterDept}&section=${ttFilterSection}`;
+      } else if (user?.year && user?.semester && user?.department) {
+         url += `?year=${user.year}&semester=${user.semester}&department=${user.department}&section=${user.section}`;
+      } else if (user?.section) {
+         url += `?section=${encodeURIComponent(user.section)}`;
+      }
+      const resSchedules = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       if (resSchedules.ok) setTimetables(await resSchedules.json());
     } catch (e) {
       console.error(e);
     }
   };
+
+  useEffect(() => {
+    if (user?.role === 'College Admin' && adminActiveTab === 'schedules') {
+      loadTimetables();
+    }
+  }, [adminActiveTab]);
 
   const loadAnnouncements = async () => {
     try {
@@ -313,7 +426,10 @@ const Dashboard = () => {
           full_name: adminUserName,
           password: adminUserPass,
           role_name: roleMap[adminUserRole] || "Student",
-          section: adminUserRole === 'student' ? adminUserSection : null
+          year: adminUserRole === 'student' ? parseInt(adminUserYear) : null,
+          semester: adminUserRole === 'student' ? parseInt(adminUserSemester) : null,
+          section: adminUserRole === 'student' ? adminUserSection : null,
+          department: (adminUserRole === 'student' || adminUserRole === 'teacher') ? adminUserDepartment.toUpperCase() : null
         }),
       });
       const data = await response.json();
@@ -432,7 +548,11 @@ const Dashboard = () => {
           day_of_week: schedDay,
           start_time: schedStart,
           end_time: schedEnd,
-          subject_name: schedSubject
+          subject_name: schedSubject,
+          year: parseInt(schedYear),
+          semester: parseInt(schedSem),
+          department: schedDept,
+          section: schedSection
         }),
       });
       const data = await response.json();
@@ -536,148 +656,13 @@ const Dashboard = () => {
   const renderTeacherDashboard = () => {
     return (
       <div className="space-y-8">
-        {/* Quick Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="academic-card p-6 bg-white/40 border border-gray-200">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-xs uppercase font-semibold tracking-wider text-gray-600">Active Classrooms</p>
-                <h3 className="text-2xl font-semibold text-gray-900 mt-2">{classrooms.length}</h3>
-              </div>
-              <div className="p-3 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-lg">
-                <BookOpen className="h-6 w-6" />
-              </div>
-            </div>
-          </div>
 
-          <div className="academic-card p-6 bg-white/40 border border-gray-200">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-xs uppercase font-semibold tracking-wider text-gray-600">Session Status</p>
-                <h3 className="text-2xl font-semibold text-emerald-700 mt-2">
-                  {classrooms.some(r => r.is_live) ? "Online" : "Offline"}
-                </h3>
-              </div>
-              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-400 rounded-lg">
-                <Zap className="h-6 w-6" />
-              </div>
-            </div>
-          </div>
-
-          <div className="academic-card p-6 bg-white/40 border border-gray-200">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-xs uppercase font-semibold tracking-wider text-gray-600">Students Connected</p>
-                <h3 className="text-2xl font-semibold text-gray-900 mt-2">
-                  {classrooms.reduce((acc, room) => acc + (room.active_students_count || 0), 0)}
-                </h3>
-              </div>
-              <div className="p-3 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-lg">
-                <Users className="h-6 w-6" />
-              </div>
-            </div>
-          </div>
-
-
-          <div className="academic-card p-6 bg-white/40 border border-gray-200">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-xs uppercase font-semibold tracking-wider text-gray-600">Focus Index</p>
-                <h3 className="text-2xl font-semibold text-gray-900 mt-2">
-                  {teacherMetrics.focus_index > 0 ? `${teacherMetrics.focus_index}%` : "0.0%"}
-                </h3>
-              </div>
-              <div className="p-3 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-lg">
-                <Award className="h-6 w-6" />
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* Dynamic Section Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main List Classrooms */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="academic-card p-6">
-              <div className="flex items-center justify-between border-b border-gray-200 pb-4 mb-5">
-                <h4 className="font-semibold text-base text-gray-800">Lecture Classrooms</h4>
-                <button onClick={loadRooms} className="text-gray-500 hover:text-gray-800 transition-colors p-1">
-                  <RefreshCw className="h-4 w-4" />
-                </button>
-              </div>
-
-              {error && <div className="p-3 mb-4 text-xs font-semibold rounded bg-red-50 border border-red-200 text-red-650">{error}</div>}
-              {success && <div className="p-3 mb-4 text-xs font-semibold rounded bg-emerald-50 border border-emerald-200 text-emerald-400">{success}</div>}
-
-              <div className="space-y-4">
-                {classrooms.length === 0 ? (
-                  <p className="text-center text-xs text-gray-500 py-8 font-semibold">No classrooms configured. Create one below.</p>
-                ) : (
-                  classrooms.map((room) => (
-                    <div key={room.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors hover:border-gray-200">
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <h5 className="font-semibold text-gray-800 text-sm">{room.name}</h5>
-                          <span className="px-2 py-0.5 rounded bg-white border border-gray-200 text-[10px] font-semibold text-indigo-600 tracking-wider">
-                            {room.code}
-                          </span>
-                        </div>
-                        <p className="text-gray-500 text-xs mt-1">
-                          Instructor: {user.name} <span className="mx-2">•</span> <Users className="h-3 w-3 inline mr-1" /> {room.active_students_count || 0} Students Joined
-                        </p>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        {room.is_live ? (
-                          <>
-                            <button
-                              onClick={() => handleToggleLive(room.code, false)}
-                              className="px-3.5 py-1.5 rounded bg-red-50 hover:bg-red-500/25 border border-red-500/30 hover:border-red-500/50 text-red-650 font-semibold text-xs transition-all flex items-center space-x-1.5"
-                            >
-                              <Square className="h-3 w-3 fill-red-400" />
-                              <span>Stop Session</span>
-                            </button>
-                            <button
-                              onClick={() => handleJoinRoom(room.code)}
-                              className="px-4 py-1.5 rounded bg-white hover:bg-gray-50 border border-gray-200 text-gray-900 font-semibold text-xs shadow-sm flex items-center space-x-1.5 transition-all"
-                            >
-                              <span>Enter Live</span>
-                              <ChevronRight className="h-3.5 w-3.5" />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => handleSimulateAttendance(room.code)}
-                              className="px-3 py-1.5 rounded bg-white hover:bg-white border border-gray-200 text-gray-600 font-semibold text-xs transition-colors flex items-center space-x-1.5"
-                              title="Simulate mock daily attendance scores"
-                            >
-                              <UserCheck className="h-3.5 w-3.5 text-gray-500" />
-                              <span>Mock Att</span>
-                            </button>
-                            <button
-                              onClick={() => handleToggleLive(room.code, true)}
-                              className="px-3.5 py-1.5 rounded bg-emerald-50 hover:bg-emerald-500/25 border border-emerald-500/30 hover:border-emerald-500/50 text-emerald-400 font-semibold text-xs transition-all flex items-center space-x-1.5"
-                            >
-                              <Play className="h-3 w-3 fill-emerald-400 text-emerald-400" />
-                              <span>Go Live</span>
-                            </button>
-                            <button
-                              onClick={() => handleDeleteClassroom(room.code)}
-                              className="px-3 py-1.5 rounded bg-red-50 hover:bg-red-500/25 border border-red-500/25 text-red-650 font-semibold text-xs transition-colors flex items-center space-x-1.5"
-                              title="Delete Classroom"
-                            >
-                              <Trash2 className="h-3.5 w-3.5 text-red-650" />
-                              <span>Delete</span>
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+            {/* Lecture Classrooms removed per user request */}
 
             {/* Performance Analytics Card */}
             <div className="academic-card p-6">
@@ -932,7 +917,8 @@ const Dashboard = () => {
         <div className="flex border-b border-gray-200 pb-2 gap-4">
           {[
             { id: 'overview', name: 'System Analytics' },
-            { id: 'users', name: 'Manage Users' },
+            { id: 'users', name: 'Register Users' },
+            { id: 'directory', name: 'User Directory' },
             { id: 'mapping', name: 'Assign Teachers' },
             { id: 'departments', name: 'Academic Structure & schedules' },
             { id: 'telemetry', name: 'Monitor AI Logs & status' }
@@ -943,7 +929,7 @@ const Dashboard = () => {
                 setError("");
                 setSuccess("");
                 setAdminActiveTab(tab.id);
-                if (tab.id === 'users') setAdminUserFilter('all');
+                if (tab.id === 'users') { setAdminUserFilter('all'); setAdminDeptFilter('all'); }
               }}
               className={`px-4 py-2 font-semibold text-xs uppercase tracking-wider transition-all border-b-2 ${adminActiveTab === tab.id
                   ? 'border-indigo-500 text-indigo-600'
@@ -1140,9 +1126,9 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* TAB 2: MANAGE USERS */}
+        {/* TAB 2: REGISTER USERS */}
         {adminActiveTab === 'users' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="max-w-2xl mx-auto">
             <div className="academic-card p-6">
               <h4 className="font-semibold text-sm text-gray-800 border-b border-gray-200 pb-4 mb-4">Register New System User</h4>
               <form onSubmit={handleAdminCreateUser} className="space-y-4">
@@ -1158,20 +1144,68 @@ const Dashboard = () => {
                     <option value="admin">Administrator</option>
                   </select>
                 </div>
-                {/* Section (Only for Student Register) */}
-                {adminUserRole === 'student' && (
+                {/* Department (Only for Student and Teacher) */}
+                {(adminUserRole === 'student' || adminUserRole === 'teacher') && (
                   <div>
-                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Section</label>
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Department</label>
                     <select
-                      value={adminUserSection}
-                      onChange={(e) => setAdminUserSection(e.target.value)}
+                      value={adminUserDepartment}
+                      onChange={(e) => {
+                        const newDept = e.target.value;
+                        setAdminUserDepartment(newDept);
+                        if (newDept === 'ME' || newDept === 'CE') {
+                          setAdminUserSection('A');
+                        } else if (newDept === 'ECE' && (adminUserSection === 'C' || adminUserSection === 'D')) {
+                          setAdminUserSection('A');
+                        }
+                      }}
                       className="w-full bg-slate-955 border border-gray-200 rounded pl-3 pr-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
                     >
-                      <option value="7th Sem A">7th Sem A</option>
-                      <option value="7th Sem B">7th Sem B</option>
-                      <option value="7th Sem C">7th Sem C</option>
-                      <option value="7th Sem D">7th Sem D</option>
+                      <option value="CSE">CSE</option>
+                      <option value="ECE">ECE</option>
+                      <option value="ME">ME</option>
+                      <option value="CE">CE</option>
                     </select>
+                  </div>
+                )}
+                {/* Year, Semester, Section (Only for Student Register) */}
+                {adminUserRole === 'student' && (
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Year</label>
+                      <select
+                        value={adminUserYear}
+                        onChange={(e) => setAdminUserYear(e.target.value)}
+                        className="w-full bg-slate-955 border border-gray-200 rounded px-2 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
+                      >
+                        {[1,2,3,4].map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Sem</label>
+                      <select
+                        value={adminUserSemester}
+                        onChange={(e) => setAdminUserSemester(e.target.value)}
+                        className="w-full bg-slate-955 border border-gray-200 rounded px-2 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
+                      >
+                        {adminUserYear 
+                          ? [(parseInt(adminUserYear) - 1) * 2 + 1, parseInt(adminUserYear) * 2].map(s => <option key={s} value={s}>{s}</option>)
+                          : [1,2,3,4,5,6,7,8].map(s => <option key={s} value={s}>{s}</option>)
+                        }
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Section</label>
+                      <select
+                        value={adminUserSection}
+                        onChange={(e) => setAdminUserSection(e.target.value)}
+                        className="w-full bg-slate-955 border border-gray-200 rounded px-2 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
+                      >
+                        {adminUserDepartment === 'CSE' && ['A','B','C','D'].map(s => <option key={s} value={s}>{s}</option>)}
+                        {adminUserDepartment === 'ECE' && ['A','B'].map(s => <option key={s} value={s}>{s}</option>)}
+                        {(adminUserDepartment === 'ME' || adminUserDepartment === 'CE') && <option value="A">A</option>}
+                      </select>
+                    </div>
                   </div>
                 )}
                 <div>
@@ -1224,50 +1258,235 @@ const Dashboard = () => {
                 </button>
               </form>
             </div>
+          </div>
+        )}
 
-            <div className="lg:col-span-2 academic-card p-6">
-              <div className="border-b border-gray-200 pb-4 mb-4 flex justify-between items-center">
-                <h4 className="font-semibold text-sm text-gray-800">
-                  {adminUserFilter === 'all' ? 'All Platform Accounts' : adminUserFilter === 'student' ? 'Student Accounts' : 'Teacher Accounts'} ({adminUsers.filter(u => adminUserFilter === 'all' || u.role === adminUserFilter).length})
-                </h4>
-                {adminUserFilter !== 'all' && (
-                  <button onClick={() => setAdminUserFilter('all')} className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 uppercase">Clear Filter</button>
-                )}
-              </div>
-              <div className="overflow-y-auto max-h-[420px] space-y-3 pr-1">
-                {adminUsers.filter(u => {
+        {/* TAB 2.5: USER DIRECTORY */}
+        {adminActiveTab === 'directory' && (
+          <div className="academic-card p-6">
+            <div className="border-b border-gray-200 pb-4 mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <h4 className="font-semibold text-sm text-gray-800">
+                {adminUserFilter === 'all' ? 'All Platform Accounts' : adminUserFilter === 'student' ? 'Student Accounts' : 'Teacher Accounts'} ({adminUsers.filter(u => {
                   const roleName = (u.role?.name || u.role || "").toLowerCase();
-                  return adminUserFilter === 'all' || roleName === adminUserFilter;
-                }).map(u => {
-                  const displayRole = u.role?.name || u.role || "Unknown";
-                  return (
-                  <div key={u.id} className="p-3 bg-slate-955/60 rounded border border-gray-200 flex items-center justify-between text-xs hover:border-gray-200 transition-colors">
-                    <div>
-                      <p className="font-semibold text-gray-800">{u.full_name || u.name}</p>
-                      <p className="text-[10px] text-gray-500 mt-0.5">{u.email}</p>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <span className={`px-2 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider border ${displayRole === 'College Admin'
-                          ? 'bg-red-50 border-red-500/25 text-red-650'
-                          : displayRole === 'Teacher'
-                            ? 'bg-indigo-50 border-indigo-500/25 text-indigo-600'
-                            : 'bg-emerald-50 border-emerald-500/25 text-emerald-400'
-                        }`}>
-                        {displayRole}
-                      </span>
-                      {u.id !== user.id && (
-                        <button
-                          onClick={() => handleAdminDeleteUser(u.id)}
-                          className="px-2.5 py-1 rounded bg-red-50 hover:bg-red-500/25 border border-red-500/25 text-red-650 text-[10px] font-semibold transition-colors"
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )})}
+                  const roleMatch = adminUserFilter === 'all' || roleName === adminUserFilter;
+                  const deptMatch = adminDeptFilter === 'all' || u.department === adminDeptFilter;
+                  
+                  if (!roleMatch || !deptMatch) return false;
+                  
+                  if (roleName === 'student') {
+                    if (adminDirYearFilter !== 'all' && u.year?.toString() !== adminDirYearFilter) return false;
+                    if (adminDirSemFilter !== 'all' && u.semester?.toString() !== adminDirSemFilter) return false;
+                    if (adminDirSecFilter !== 'all' && u.section !== adminDirSecFilter) return false;
+                  }
+                  
+                  return true;
+                }).length})
+              </h4>
+              <div className="flex flex-wrap items-center gap-3">
+                <select
+                  value={adminUserFilter}
+                  onChange={(e) => {
+                    setAdminUserFilter(e.target.value);
+                    if (e.target.value !== 'student') {
+                      setAdminDirYearFilter('all');
+                      setAdminDirSemFilter('all');
+                      setAdminDirSecFilter('all');
+                    }
+                  }}
+                  className="bg-white border border-gray-200 rounded text-[10px] px-2 py-1 text-gray-700 font-semibold uppercase tracking-wider focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="all">All Roles</option>
+                  <option value="student">Students</option>
+                  <option value="teacher">Teachers</option>
+                </select>
+                <select
+                  value={adminDeptFilter}
+                  onChange={(e) => setAdminDeptFilter(e.target.value)}
+                  className="bg-white border border-gray-200 rounded text-[10px] px-2 py-1 text-gray-700 font-semibold uppercase tracking-wider focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="all">All Depts</option>
+                  <option value="CSE">CSE</option>
+                  <option value="ECE">ECE</option>
+                  <option value="ME">ME</option>
+                  <option value="CE">CE</option>
+                </select>
+                
+                {adminUserFilter === 'student' && (
+                  <>
+                    <select
+                      value={adminDirYearFilter}
+                      onChange={(e) => {
+                        setAdminDirYearFilter(e.target.value);
+                        setAdminDirSemFilter('all'); // reset sem on year change
+                      }}
+                      className="bg-white border border-gray-200 rounded text-[10px] px-2 py-1 text-gray-700 font-semibold uppercase tracking-wider focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="all">All Years</option>
+                      {[1,2,3,4].map(y => <option key={y} value={y}>Year {y}</option>)}
+                    </select>
+                    
+                    <select
+                      value={adminDirSemFilter}
+                      onChange={(e) => setAdminDirSemFilter(e.target.value)}
+                      className="bg-white border border-gray-200 rounded text-[10px] px-2 py-1 text-gray-700 font-semibold uppercase tracking-wider focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="all">All Sems</option>
+                      {adminDirYearFilter !== 'all' 
+                        ? [(parseInt(adminDirYearFilter) - 1) * 2 + 1, parseInt(adminDirYearFilter) * 2].map(s => <option key={s} value={s}>Sem {s}</option>)
+                        : [1,2,3,4,5,6,7,8].map(s => <option key={s} value={s}>Sem {s}</option>)
+                      }
+                    </select>
+                    
+                    <select
+                      value={adminDirSecFilter}
+                      onChange={(e) => setAdminDirSecFilter(e.target.value)}
+                      className="bg-white border border-gray-200 rounded text-[10px] px-2 py-1 text-gray-700 font-semibold uppercase tracking-wider focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="all">All Secs</option>
+                      {['A','B','C','D'].map(s => <option key={s} value={s}>Sec {s}</option>)}
+                    </select>
+                  </>
+                )}
+
+                {(adminUserFilter !== 'all' || adminDeptFilter !== 'all' || adminDirYearFilter !== 'all' || adminDirSemFilter !== 'all' || adminDirSecFilter !== 'all') && (
+                  <button onClick={() => { 
+                    setAdminUserFilter('all'); 
+                    setAdminDeptFilter('all'); 
+                    setAdminDirYearFilter('all');
+                    setAdminDirSemFilter('all');
+                    setAdminDirSecFilter('all');
+                  }} className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 uppercase">Clear Filters</button>
+                )}
+                
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-[10px] font-bold uppercase tracking-wider transition-colors ml-2"
+                >
+                  <Download className="h-3 w-3" />
+                  <span>Export</span>
+                </button>
               </div>
             </div>
+            <div className="overflow-y-auto max-h-[600px] space-y-3 pr-1">
+              {adminUsers.filter(u => {
+                const roleName = (u.role?.name || u.role || "").toLowerCase();
+                const roleMatch = adminUserFilter === 'all' || roleName === adminUserFilter;
+                const deptMatch = adminDeptFilter === 'all' || u.department === adminDeptFilter;
+                
+                if (!roleMatch || !deptMatch) return false;
+                
+                if (roleName === 'student') {
+                  if (adminDirYearFilter !== 'all' && u.year?.toString() !== adminDirYearFilter) return false;
+                  if (adminDirSemFilter !== 'all' && u.semester?.toString() !== adminDirSemFilter) return false;
+                  if (adminDirSecFilter !== 'all' && u.section !== adminDirSecFilter) return false;
+                }
+                
+                return true;
+              }).map(u => {
+                const displayRole = u.role?.name || u.role || "Unknown";
+                return (
+                <div key={u.id} className="p-3 bg-slate-955/60 rounded border border-gray-200 flex items-center justify-between text-xs hover:border-gray-200 transition-colors">
+                  <div>
+                    <p className="font-semibold text-gray-800 flex items-center space-x-2">
+                      <span>{u.full_name || u.name}</span>
+                      {u.department && (
+                        <span className="text-gray-600 text-[11px]">
+                          [{u.department}{displayRole === 'Student' && u.year ? `, Year: ${u.year}, Sem: ${u.semester}, Sec: ${u.section}` : ''}]
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">{u.email}</p>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider border ${displayRole === 'College Admin'
+                        ? 'bg-red-50 border-red-500/25 text-red-650'
+                        : displayRole === 'Teacher'
+                          ? 'bg-indigo-50 border-indigo-500/25 text-indigo-600'
+                          : 'bg-emerald-50 border-emerald-500/25 text-emerald-400'
+                      }`}>
+                      {displayRole}
+                    </span>
+                    {u.id !== user.id && (
+                      <button
+                        onClick={() => handleAdminDeleteUser(u.id)}
+                        className="px-2.5 py-1 rounded bg-red-50 hover:bg-red-500/25 border border-red-500/25 text-red-650 text-[10px] font-semibold transition-colors"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )})}
+            </div>
+
+            {/* EXPORT MODAL */}
+            {showExportModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+                <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
+                  <div className="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                    <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                      <Download className="h-4 w-4 text-indigo-600" />
+                      Export Directory Options
+                    </h3>
+                    <button onClick={() => setShowExportModal(false)} className="text-gray-400 hover:text-gray-600">
+                      <Plus className="h-5 w-5 rotate-45" />
+                    </button>
+                  </div>
+                  
+                  <div className="p-5 space-y-5">
+                    <div>
+                      <label className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-500 mb-2">Export Format</label>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => setExportFormat('csv')}
+                          className={`flex-1 py-2 rounded text-xs font-bold uppercase tracking-wider border transition-colors ${exportFormat === 'csv' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                        >
+                          Excel (CSV)
+                        </button>
+                        <button
+                          onClick={() => setExportFormat('pdf')}
+                          className={`flex-1 py-2 rounded text-xs font-bold uppercase tracking-wider border transition-colors ${exportFormat === 'pdf' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                        >
+                          PDF
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-500 mb-2">Fields to Export</label>
+                      <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-gray-700">
+                        {Object.keys(exportFields).map(field => (
+                          <label key={field} className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={exportFields[field]}
+                              onChange={(e) => setExportFields({...exportFields, [field]: e.target.checked})}
+                              className="rounded text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="capitalize">{field}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-5 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+                    <button 
+                      onClick={() => setShowExportModal(false)}
+                      className="px-4 py-2 rounded bg-white border border-gray-200 text-gray-600 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      onClick={handleExportDirectory}
+                      className="px-4 py-2 rounded bg-white border border-gray-200 text-gray-600 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition-colors"
+                    >
+                      Download File
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1429,6 +1648,65 @@ const Dashboard = () => {
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Year</label>
+                      <select
+                        value={schedYear}
+                        onChange={(e) => {
+                          setSchedYear(e.target.value);
+                          setSchedSem(((parseInt(e.target.value) - 1) * 2 + 1).toString());
+                        }}
+                        className="w-full bg-slate-955 border border-gray-200 rounded pl-3 pr-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
+                      >
+                        {[1,2,3,4].map(y => <option key={y} value={y}>Year {y}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Semester</label>
+                      <select
+                        value={schedSem}
+                        onChange={(e) => setSchedSem(e.target.value)}
+                        className="w-full bg-slate-955 border border-gray-200 rounded pl-3 pr-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
+                      >
+                        {schedYear 
+                          ? [(parseInt(schedYear) - 1) * 2 + 1, parseInt(schedYear) * 2].map(s => <option key={s} value={s}>Sem {s}</option>)
+                          : [1,2,3,4,5,6,7,8].map(s => <option key={s} value={s}>Sem {s}</option>)
+                        }
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Department</label>
+                      <select
+                        value={schedDept}
+                        onChange={(e) => {
+                          const newDept = e.target.value;
+                          setSchedDept(newDept);
+                          if (newDept === 'ME' || newDept === 'CE') setSchedSection('A');
+                          else if (newDept === 'ECE' && (schedSection === 'C' || schedSection === 'D')) setSchedSection('A');
+                        }}
+                        className="w-full bg-slate-955 border border-gray-200 rounded pl-3 pr-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
+                      >
+                        <option value="CSE">CSE</option>
+                        <option value="ECE">ECE</option>
+                        <option value="ME">ME</option>
+                        <option value="CE">CE</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Section</label>
+                      <select
+                        value={schedSection}
+                        onChange={(e) => setSchedSection(e.target.value)}
+                        className="w-full bg-slate-955 border border-gray-200 rounded pl-3 pr-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
+                      >
+                        {schedDept === 'CSE' && ['A','B','C','D'].map(s => <option key={s} value={s}>Section {s}</option>)}
+                        {schedDept === 'ECE' && ['A','B'].map(s => <option key={s} value={s}>Section {s}</option>)}
+                        {(schedDept === 'ME' || schedDept === 'CE') && <option value="A">Section A</option>}
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-3 gap-4">
                     <div>
                       <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Day of Week</label>
@@ -1477,34 +1755,184 @@ const Dashboard = () => {
             </div>
 
             <div className="academic-card p-6">
-              <h4 className="font-semibold text-sm text-gray-800 border-b border-gray-200 pb-4 mb-4">Master Academic Schedule</h4>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-gray-200 text-gray-500">
-                      <th className="py-2.5 font-semibold">Subject</th>
-                      <th className="py-2.5 font-semibold">Classroom Code</th>
-                      <th className="py-2.5 font-semibold">Day</th>
-                      <th className="py-2.5 font-semibold">Schedule Slot</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-900">
-                    {timetables.length === 0 ? (
-                      <tr>
-                        <td colSpan="4" className="py-6 text-center text-slate-600 italic">No timetables generated yet. Add one above.</td>
-                      </tr>
-                    ) : (
-                      timetables.map(s => (
-                        <tr key={s.id} className="text-gray-700 hover:bg-white/40">
-                          <td className="py-3 font-semibold text-gray-800">{s.subject_name}</td>
-                          <td className="py-3"><span className="px-2 py-0.5 bg-white rounded border border-gray-200 text-indigo-600 font-semibold">{s.classroom_code}</span></td>
-                          <td className="py-3 font-semibold">{s.day_of_week}</td>
-                          <td className="py-3 font-semibold text-gray-800">{s.start_time} - {s.end_time}</td>
+              <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-200 pb-4 mb-4 gap-4">
+                <h4 className="font-semibold text-sm text-gray-800">Master Academic Schedule</h4>
+                
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={ttFilterYear}
+                    onChange={(e) => {
+                      setTtFilterYear(e.target.value);
+                      setTtFilterSem(((parseInt(e.target.value) - 1) * 2 + 1).toString());
+                    }}
+                    className="bg-white border border-gray-200 rounded px-2 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-indigo-500 min-w-[70px]"
+                  >
+                    <option value="1">Year 1</option>
+                    <option value="2">Year 2</option>
+                    <option value="3">Year 3</option>
+                    <option value="4">Year 4</option>
+                  </select>
+                  <select
+                    value={ttFilterSem}
+                    onChange={(e) => setTtFilterSem(e.target.value)}
+                    className="bg-white border border-gray-200 rounded px-2 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-indigo-500 min-w-[70px]"
+                  >
+                    {ttFilterYear 
+                      ? [(parseInt(ttFilterYear) - 1) * 2 + 1, parseInt(ttFilterYear) * 2].map(s => <option key={s} value={s}>Sem {s}</option>)
+                      : [1,2,3,4,5,6,7,8].map(s => <option key={s} value={s}>Sem {s}</option>)
+                    }
+                  </select>
+                  <select
+                    value={ttFilterDept}
+                    onChange={(e) => {
+                      const newDept = e.target.value;
+                      setTtFilterDept(newDept);
+                      if (newDept === 'ME' || newDept === 'CE') setTtFilterSection('A');
+                      else if (newDept === 'ECE' && (ttFilterSection === 'C' || ttFilterSection === 'D')) setTtFilterSection('A');
+                    }}
+                    className="bg-white border border-gray-200 rounded px-2 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-indigo-500 min-w-[70px]"
+                  >
+                    <option value="CSE">CSE</option>
+                    <option value="ECE">ECE</option>
+                    <option value="ME">ME</option>
+                    <option value="CE">CE</option>
+                  </select>
+                  <select
+                    value={ttFilterSection}
+                    onChange={(e) => setTtFilterSection(e.target.value)}
+                    className="bg-white border border-gray-200 rounded px-2 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-indigo-500 min-w-[70px]"
+                  >
+                    {ttFilterDept === 'CSE' && ['A','B','C','D'].map(s => <option key={s} value={s}>Sec {s}</option>)}
+                    {ttFilterDept === 'ECE' && ['A','B'].map(s => <option key={s} value={s}>Sec {s}</option>)}
+                    {(ttFilterDept === 'ME' || ttFilterDept === 'CE') && <option value="A">Sec A</option>}
+                  </select>
+                  
+                  <button 
+                    onClick={loadTimetables}
+                    className="ml-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded text-xs font-semibold shadow-sm transition-colors"
+                  >
+                    Show
+                  </button>
+                </div>
+              </div>
+              
+              <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
+                {(() => {
+                  if (timetables.length === 0) {
+                    return <div className="py-12 text-center text-slate-500 italic bg-white text-xs">No timetables found for this section. Add one above.</div>;
+                  }
+
+                  const daysOfWeekList = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                  
+                  const parseTime = (timeStr) => {
+                    if (!timeStr) return 0;
+                    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+                    if (!match) return 0;
+                    let [, hours, minutes, period] = match;
+                    hours = parseInt(hours, 10);
+                    minutes = parseInt(minutes, 10);
+                    if (period.toUpperCase() === 'PM' && hours !== 12) hours += 12;
+                    if (period.toUpperCase() === 'AM' && hours === 12) hours = 0;
+                    return hours * 60 + minutes;
+                  };
+
+                  const standardSlots = [
+                    { label: '8:00 - 9:00', start: '08:00 AM', end: '09:00 AM' },
+                    { label: '9:00 - 10:00', start: '09:00 AM', end: '10:00 AM' },
+                    { label: '10:00 - 10:30', start: '10:00 AM', end: '10:30 AM', isBreak: true, name: 'Tea Break' },
+                    { label: '10:30 - 11:30', start: '10:30 AM', end: '11:30 AM' },
+                    { label: '11:30 - 12:30', start: '11:30 AM', end: '12:30 PM' },
+                    { label: '12:30 - 1:30', start: '12:30 PM', end: '01:30 PM', isBreak: true, name: 'Lunch Break' },
+                    { label: '1:30 - 2:30', start: '01:30 PM', end: '02:30 PM' },
+                    { label: '2:30 - 3:30', start: '02:30 PM', end: '03:30 PM' },
+                    { label: '3:30 - 4:30', start: '03:30 PM', end: '04:30 PM' }
+                  ];
+
+                  const activeDays = daysOfWeekList.filter(day => 
+                    day !== 'Saturday' || timetables.some(t => t.day_of_week === 'Saturday')
+                  );
+
+                  return (
+                    <table className="w-full text-xs text-left border-collapse bg-white">
+                      <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase font-bold text-[9px] tracking-widest">
+                        <tr>
+                          <th className="py-3 px-4 border-r border-gray-200 bg-gray-100/50 w-24 text-center">Time & Day</th>
+                          {standardSlots.map((slot, index) => (
+                            <th key={index} className={`py-3 px-4 border-r border-gray-200 text-center ${slot.isBreak ? 'w-12 bg-gray-100/50' : 'min-w-[120px] whitespace-nowrap'}`}>
+                              {slot.label}
+                            </th>
+                          ))}
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {activeDays.map((day, dayIndex) => {
+                          const skipSlots = new Set();
+                          return (
+                            <tr key={day} className="hover:bg-gray-50/30 transition-colors">
+                              <td className="py-4 px-4 border-r border-gray-200 font-extrabold text-gray-700 bg-gray-50/50 text-center uppercase tracking-wider text-[10px]">
+                                {day.substring(0, 3)}
+                              </td>
+                              {standardSlots.map((slot, index) => {
+                                if (skipSlots.has(index)) return null;
+
+                                if (slot.isBreak) {
+                                  if (dayIndex === 0) {
+                                    return (
+                                      <td key={index} rowSpan={activeDays.length} className="p-2 border-r border-gray-200 text-center bg-gray-50/80">
+                                        <div className="flex items-center justify-center h-full min-h-[100px]">
+                                          <span className="text-gray-400 font-bold uppercase tracking-widest text-xs rotate-180" style={{ writingMode: 'vertical-rl' }}>{slot.name}</span>
+                                        </div>
+                                      </td>
+                                    );
+                                  } else {
+                                    return null;
+                                  }
+                                }
+
+                                const classStartingHere = timetables.find(t => t.day_of_week === day && t.start_time === slot.start);
+                                let colSpan = 1;
+                                
+                                if (classStartingHere) {
+                                  const classEnd = parseTime(classStartingHere.end_time);
+                                  for (let i = index + 1; i < standardSlots.length; i++) {
+                                    if (!standardSlots[i].isBreak && parseTime(standardSlots[i].start) < classEnd) {
+                                      colSpan++;
+                                      skipSlots.add(i);
+                                    } else if (standardSlots[i].isBreak && parseTime(standardSlots[i].end) <= classEnd) {
+                                      // If a class actually spans over a break (rare), we must handle it, but standard college classes don't.
+                                      // We will just break to avoid breaking the UI with rowSpans.
+                                      break;
+                                    } else {
+                                      break;
+                                    }
+                                  }
+                                }
+
+                                return (
+                                  <td key={index} colSpan={colSpan} className="p-2 border-r border-gray-200 text-center relative h-full">
+                                    {classStartingHere ? (
+                                      <div className="bg-indigo-50/60 rounded-md p-2.5 border border-indigo-100/80 flex flex-col items-center justify-center gap-1.5 h-full hover:border-indigo-300 hover:shadow-sm transition-all hover:-translate-y-0.5 cursor-default group">
+                                        <span className="font-bold text-indigo-700 text-xs leading-tight group-hover:text-indigo-800 transition-colors">{classStartingHere.subject_name}</span>
+                                        <div className="flex items-center gap-1.5 text-[9px] font-bold tracking-wide">
+                                          <span className="bg-white px-1.5 py-0.5 rounded text-gray-600 border border-gray-200 shadow-sm">{classStartingHere.classroom_code}</span>
+                                          <span className="bg-indigo-100/80 px-1.5 py-0.5 rounded text-indigo-700 border border-indigo-200 shadow-sm">{classStartingHere.section || 'All Sections'}</span>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center justify-center h-full min-h-[60px] opacity-0 hover:opacity-100 transition-opacity">
+                                        <span className="text-gray-300 text-[10px] font-semibold uppercase tracking-wider">Free</span>
+                                      </div>
+                                    )}
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  );
+                })()}
               </div>
             </div>
           </div>

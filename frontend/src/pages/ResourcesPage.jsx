@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useClassroom } from '../contexts/ClassroomContext';
 import { 
@@ -11,20 +11,32 @@ import {
   PlayCircle,
   FolderPlus,
   ArrowDownToLine,
-  ChevronRight
+  ChevronRight,
+  Trash2
 } from 'lucide-react';
 
 const ResourcesPage = () => {
   const { user } = useAuth();
-  const { resources, uploadResource, downloadResource } = useClassroom();
+  const { resources, uploadResource, downloadResource, fetchGlobalResources, deleteResource } = useClassroom();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFolder, setActiveFolder] = useState("all"); // all, notes, code, sheets
   
+  // Fetch global resources on mount
+  useEffect(() => {
+    fetchGlobalResources();
+  }, []);
+
   // Custom upload fields
   const [title, setTitle] = useState("");
-  const [targetSection, setTargetSection] = useState("All Sections");
   const [uploadFile, setUploadFile] = useState(null);
   const [success, setSuccess] = useState("");
+  
+  // Target fields
+  const [targetYear, setTargetYear] = useState("");
+  const [targetDepartment, setTargetDepartment] = useState("All");
+  const [targetSemester, setTargetSemester] = useState("");
+  const [targetClass, setTargetClass] = useState("All");
+  const [targetSection, setTargetSection] = useState("All Sections");
 
   const handleUpload = async (e) => {
     e.preventDefault();
@@ -32,7 +44,16 @@ const ResourcesPage = () => {
     
     // We need activeClassroom in scope, let's grab it from context
     const targetCode = "GLOBAL"; // We'll let Context default to activeClassroom if this is omitted.
-    await uploadResource(title, uploadFile, targetSection);
+    
+    const filters = {
+      year: targetYear,
+      department: targetDepartment,
+      semester: targetSemester,
+      className: targetClass,
+      section: targetSection
+    };
+    
+    await uploadResource(title, uploadFile, filters, "GLOBAL");
     setTitle("");
     setUploadFile(null);
     setSuccess("Academic document package created and stored successfully.");
@@ -43,8 +64,14 @@ const ResourcesPage = () => {
     await downloadResource(id, title, fileType);
   };
 
-  const isTeacher = user?.role === 'Teacher' || user?.role === 'College Admin';
+  const handleDelete = async (id) => {
+    if (window.confirm("Are you sure you want to delete this resource? It will be removed from Cloudflare and all student views.")) {
+      await deleteResource(id);
+    }
+  };
 
+  const isTeacher = user?.role === 'Teacher' || user?.role === 'College Admin' || user?.role === 'Super Admin';
+  const isAdmin = user?.role === 'College Admin' || user?.role === 'Super Admin';
   // Filter list by folder and search
   const filtered = resources.filter(res => {
     const matchesSearch = res.title.toLowerCase().includes(searchTerm.toLowerCase());
@@ -151,6 +178,69 @@ const ResourcesPage = () => {
                   />
                 </div>
                 
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-500 mb-1.5">Target Year</label>
+                    <select
+                      value={targetYear}
+                      onChange={(e) => {
+                        setTargetYear(e.target.value);
+                        setTargetSemester("");
+                      }}
+                      className="w-full bg-white border border-gray-200 rounded px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="">All Years</option>
+                      <option value="1">1st Year</option>
+                      <option value="2">2nd Year</option>
+                      <option value="3">3rd Year</option>
+                      <option value="4">4th Year</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-500 mb-1.5">Target Semester</label>
+                    <select
+                      value={targetSemester}
+                      onChange={(e) => setTargetSemester(e.target.value)}
+                      className="w-full bg-white border border-gray-200 rounded px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="">All Semesters</option>
+                      {targetYear 
+                        ? [(parseInt(targetYear) - 1) * 2 + 1, parseInt(targetYear) * 2].map(s => <option key={s} value={s}>{s}th Sem</option>)
+                        : [1,2,3,4,5,6,7,8].map(s => <option key={s} value={s}>{s}th Sem</option>)
+                      }
+                    </select>
+                  </div>
+                </div>
+
+                {isAdmin && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-500 mb-1.5">Department</label>
+                      <select
+                        value={targetDepartment}
+                        onChange={(e) => setTargetDepartment(e.target.value)}
+                        className="w-full bg-white border border-gray-200 rounded px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
+                      >
+                        <option value="All">All Departments</option>
+                        <option value="CSE">CSE</option>
+                        <option value="ECE">ECE</option>
+                        <option value="ME">ME</option>
+                        <option value="CE">CE</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-500 mb-1.5">Target Class</label>
+                      <input
+                        type="text"
+                        value={targetClass}
+                        onChange={(e) => setTargetClass(e.target.value)}
+                        className="w-full bg-white border border-gray-200 rounded px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
+                        placeholder="e.g. CS101 or All"
+                      />
+                    </div>
+                  </div>
+                )}
+                
                 <div>
                   <label className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-500 mb-1.5">Target Section</label>
                   <select
@@ -159,10 +249,10 @@ const ResourcesPage = () => {
                     className="w-full bg-white border border-gray-200 rounded px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
                   >
                     <option value="All Sections">All Sections</option>
-                    <option value="7th Sem A">7th Sem A</option>
-                    <option value="7th Sem B">7th Sem B</option>
-                    <option value="7th Sem C">7th Sem C</option>
-                    <option value="7th Sem D">7th Sem D</option>
+                    <option value="A">Section A</option>
+                    <option value="B">Section B</option>
+                    <option value="C">Section C</option>
+                    <option value="D">Section D</option>
                   </select>
                 </div>
                 <button
@@ -215,13 +305,24 @@ const ResourcesPage = () => {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handleDownload(file.id, file.title, file.file_type)}
-                      className="p-2 bg-white hover:bg-white border border-gray-200 rounded-lg text-gray-600 hover:text-indigo-600 transition-colors"
-                      title="Download Secure Lecture Packet"
-                    >
-                      <ArrowDownToLine className="h-5 w-5" />
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleDownload(file.id, file.title, file.file_type)}
+                        className="p-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-gray-600 hover:text-indigo-600 transition-colors shadow-sm"
+                        title="Download Secure Lecture Packet"
+                      >
+                        <ArrowDownToLine className="h-5 w-5" />
+                      </button>
+                      {isTeacher && (
+                        <button
+                          onClick={() => handleDelete(file.id)}
+                          className="p-2 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg text-red-650 transition-colors shadow-sm"
+                          title="Delete Resource"
+                        >
+                          <Trash2 className="h-5 w-5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))
               )}
