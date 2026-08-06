@@ -835,41 +835,36 @@ const LiveClassroom = ({ setCurrentPage }) => {
             <h3 className="text-xl font-bold text-gray-800 mb-2">End Live Session</h3>
             <p className="text-sm text-gray-500 mb-6">Do you want to store the transcript and summary for this session?</p>
             
-            <div className="space-y-4 mb-6">
-              <label className="flex items-center space-x-2 text-sm font-semibold text-gray-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={endModalData.store}
-                  onChange={(e) => setEndModalData({ ...endModalData, store: e.target.checked })}
-                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                <span>Store Session Records</span>
-              </label>
-
-
-            </div>
-            
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setShowEndModal(false)}
-                className="px-4 py-2 rounded bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 text-xs font-bold transition-colors"
-              >
-                Cancel
-              </button>
+            <div className="flex flex-col space-y-3">
               <button
                 onClick={() => {
-                  startLiveClassroomSession(
-                    activeClassroom.code,
-                    false,
-                    endModalData.store
-                  );
+                  startLiveClassroomSession(activeClassroom.code, false, true);
                   leaveClassroom();
                   setShowEndModal(false);
                   navigate('/dashboard');
                 }}
-                className="px-4 py-2 rounded bg-white hover:bg-gray-100 text-black border border-black text-xs font-bold transition-colors shadow-sm"
+                className="w-full px-4 py-3 rounded bg-black hover:bg-gray-800 text-white border border-black text-xs font-bold transition-colors shadow-sm"
               >
-                Confirm End Class
+                Yes, End and Save Records
+              </button>
+              
+              <button
+                onClick={() => {
+                  startLiveClassroomSession(activeClassroom.code, false, false);
+                  leaveClassroom();
+                  setShowEndModal(false);
+                  navigate('/dashboard');
+                }}
+                className="w-full px-4 py-3 rounded bg-white hover:bg-gray-100 text-black border border-black text-xs font-bold transition-colors shadow-sm"
+              >
+                No, End Without Saving
+              </button>
+
+              <button
+                onClick={() => setShowEndModal(false)}
+                className="w-full px-4 py-3 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition-colors"
+              >
+                Cancel
               </button>
             </div>
           </div>
