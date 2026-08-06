@@ -249,7 +249,7 @@ export const ClassroomProvider = ({ children }) => {
     setLanguage(lang);
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       ws.current.send(JSON.stringify({
-        type: "code_change",
+        type: "code_sync",
         code: newCode,
         language: lang,
         sender: user?.full_name
