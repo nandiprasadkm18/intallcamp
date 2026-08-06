@@ -19,28 +19,6 @@
 
 ---
 
-## ✨ Features
-
-### 🎓 Live Smart Classroom
-- **Real-Time Collaborative Coding:** Integrated Monaco Editor with multi-language support (Python, JS, Java, C, Go). Code changes are synchronized live across all student screens via WebSockets.
-- **Built-in AI Compiler & Debugger:** Execute code directly in the browser. If a student encounters a syntax error, the "AI Fix" button automatically analyzes the traceback, explains the error, and provides the corrected code using Groq LLM.
-- **Live Speech-to-Text Whisper:** Real-time transcription of the teacher's lecture using advanced audio streaming.
-- **Ghost Doubt Board:** An anonymous QA board where students can safely ask questions during live lectures without fear of judgment.
-
-### 🤖 Automated AI Administration
-- **Instant Lecture Summarization:** Upon ending a class, the raw lecture transcript is automatically processed by AI to generate executive summaries, key concepts, and pop quizzes.
-- **Cloud Archival:** All transcripts and generated summaries are securely archived to Cloudflare R2 / AWS S3 object storage to preserve database performance.
-
-### 📊 Role-Based Dashboards
-- **Student Portal:** Track attendance percentages, view registered subjects, access preserved lecture summaries, and monitor academic growth logs.
-- **Teacher Portal:** Create live classroom sessions with targeted Year and Section scoping, monitor live class telemetry, and manage timetables.
-- **Super Admin Enterprise Portal:** Manage participating colleges, oversee global users, monitor system health, and control feature toggles across the entire platform.
-
-### 📱 Responsive & Accessible
-- **Mobile-First Design:** Fully responsive fluid grids and hamburger navigation ensure the platform looks and works perfectly on mobile phones, tablets, and desktop computers.
-
----
-
 ## 🏗️ Architecture
 
 ```mermaid
