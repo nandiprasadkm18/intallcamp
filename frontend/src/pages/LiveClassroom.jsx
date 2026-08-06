@@ -344,18 +344,18 @@ const LiveClassroom = ({ setCurrentPage }) => {
               }}
               className={`px-4 py-2 rounded text-xs font-bold flex items-center space-x-1.5 transition-all ${
                 isWhisperRunning 
-                  ? 'bg-red-50 hover:bg-red-500/20 border border-red-500/30 text-red-650' 
-                  : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-glow-emerald'
+                  ? 'bg-white hover:bg-gray-100 border border-black text-black' 
+                  : 'bg-white hover:bg-gray-100 text-black border border-black'
               }`}
             >
               {isWhisperRunning ? (
                 <>
-                  <Square className="h-3 w-3 fill-red-400" />
+                  <Square className="h-3 w-3 fill-black" />
                   <span>Stop Speech API</span>
                 </>
               ) : (
                 <>
-                  <Play className="h-3 w-3 fill-white" />
+                  <Play className="h-3 w-3 fill-black text-black" />
                   <span>Start Live Whisper</span>
                 </>
               )}
@@ -372,7 +372,7 @@ const LiveClassroom = ({ setCurrentPage }) => {
           {isTeacher && (
             <button
               onClick={() => setShowEndModal(true)}
-              className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors shadow-sm"
+              className="px-4 py-2 rounded bg-white hover:bg-gray-100 text-black border border-black text-xs font-bold transition-colors shadow-sm"
             >
               End Class
             </button>
@@ -489,7 +489,7 @@ const LiveClassroom = ({ setCurrentPage }) => {
                   {isTeacher && (
                     <button
                       onClick={() => broadcastCodeChange(localCode, selectedLang)}
-                      className="ml-3 px-3 py-1 bg-indigo-500 hover:bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+                      className="ml-3 px-3 py-1 bg-white hover:bg-gray-100 text-black text-[10px] font-bold uppercase tracking-wider rounded border border-black transition-colors"
                     >
                       Share Code
                     </button>
@@ -498,7 +498,7 @@ const LiveClassroom = ({ setCurrentPage }) => {
                     <button
                       onClick={handleRunCode}
                       disabled={isCompiling}
-                      className="ml-3 px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-[10px] font-bold uppercase tracking-wider rounded transition-colors disabled:opacity-50"
+                      className="ml-3 px-3 py-1 bg-white hover:bg-gray-100 text-black border border-black text-[10px] font-bold uppercase tracking-wider rounded transition-colors disabled:opacity-50"
                     >
                       {isCompiling ? "Running..." : "Run Code"}
                     </button>
@@ -903,7 +903,7 @@ const LiveClassroom = ({ setCurrentPage }) => {
                   setShowEndModal(false);
                   navigate('/dashboard');
                 }}
-                className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors shadow-sm"
+                className="px-4 py-2 rounded bg-white hover:bg-gray-100 text-black border border-black text-xs font-bold transition-colors shadow-sm"
               >
                 Confirm End Class
               </button>
