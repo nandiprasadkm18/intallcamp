@@ -13,8 +13,8 @@ export const ClassroomProvider = ({ children }) => {
   const [attendance, setAttendance] = useState([]);
   
   // Real-time Collaborative Code States
-  const [code, setCode] = useState("");
-  const [language, setLanguage] = useState("javascript");
+  const [code, setCode] = useState("// Loading code workspace...");
+  const [language, setLanguage] = useState("plain_text");
   
   // Real-time Observability Logs
   const [sentiment, setSentiment] = useState({

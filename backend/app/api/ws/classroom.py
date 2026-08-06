@@ -37,8 +37,13 @@ class ConnectionManager:
     async def broadcast_connections_update(self, room_code: str):
         if room_code in self.active_connections:
             students = [c for c in self.active_connections[room_code] if c.get("role") == "Student"]
-            count = len(students)
-            active_students = [{"name": c["name"]} for c in students]
+            
+            unique_students = {}
+            for c in students:
+                unique_students[c["name"]] = c
+                
+            count = len(unique_students)
+            active_students = [{"user_name": c["name"]} for c in unique_students.values()]
             message = {
                 "type": "connections_update",
                 "count": count,
@@ -127,7 +132,8 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, user_name: st
                     
                     # Base metrics
                     students_list = [c for c in manager.active_connections.get(room_code, []) if c.get("role") == "Student"]
-                    active_students = len(students_list)
+                    unique_students = set(c["name"] for c in students_list)
+                    active_students = len(unique_students)
                     
                     # Calculate real Class Participation (Base 50%, +15% per doubt, capped at 100%)
                     participation = min(100.0, 50.0 + (doubt_count * 15.0))
@@ -271,6 +277,9 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, user_name: st
                 finally:
                     if os.path.exists(temp_filename):
                         os.remove(temp_filename)
+            
+            elif message.get("type") == "code_sync":
+                await manager.broadcast(data, room_code)
                 
     except WebSocketDisconnect:
         manager.disconnect(websocket, room_code)
