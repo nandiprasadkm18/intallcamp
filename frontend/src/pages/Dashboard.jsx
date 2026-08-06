@@ -983,28 +983,7 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Student Timetable Card */}
-            <div className="academic-card p-6">
-              <h4 className="font-semibold text-sm text-gray-800 border-b border-gray-200 pb-4 mb-4 flex items-center justify-between">
-                <span>Academic Timetable</span>
-                <span className="px-1.5 py-0.5 rounded bg-white border border-gray-200 text-[9px] font-semibold text-indigo-600 font-mono uppercase">CS101 / AI502</span>
-              </h4>
-              <div className="space-y-3 max-h-[180px] overflow-y-auto pr-1">
-                {timetables.length === 0 ? (
-                  <p className="text-[10px] text-slate-600 italic">No class schedules generated yet.</p>
-                ) : (
-                  timetables.map(s => (
-                    <div key={s.id} className="p-3 bg-gray-50 rounded border border-gray-200 flex items-center justify-between text-xs hover:border-gray-200 transition-colors">
-                      <div>
-                        <p className="font-semibold text-gray-800">{s.subject_name}</p>
-                        <p className="text-[9px] text-gray-500 mt-0.5">{s.day_of_week} • Slot: {s.start_time} - {s.end_time}</p>
-                      </div>
-                      <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-200 text-[9px] font-semibold">Room {s.classroom_code}</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+
 
             <div className="academic-card p-6">
               <h4 className="font-semibold text-sm text-gray-800 border-b border-gray-200 pb-4 mb-4">Registered Subjects</h4>
