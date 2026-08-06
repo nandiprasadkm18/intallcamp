@@ -92,4 +92,8 @@ class LectureSummary(Base):
     transcript_s3_key = Column(String, nullable=True)
     summary_s3_key = Column(String, nullable=True)
     
+    year = Column(Integer, nullable=True)
+    semester = Column(Integer, nullable=True)
+    section = Column(String, nullable=True)
+    
     classroom = relationship("Classroom")

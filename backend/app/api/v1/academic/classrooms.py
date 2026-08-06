@@ -116,8 +116,12 @@ def create_classroom(
 
 class LiveUpdateStatus(BaseModel):
     is_live: bool
+    store_record: bool = False
+    year: Optional[int] = None
+    semester: Optional[int] = None
+    section: Optional[str] = None
 
-def process_end_of_class(db: Session, classroom_code: str):
+def process_end_of_class(db: Session, classroom_code: str, year: Optional[int] = None, semester: Optional[int] = None, section: Optional[str] = None):
     # Retrieve all transcripts for this classroom in the past X hours to form context
     # Since we use mock classrooms, we will just grab the latest transcripts
     transcripts = db.query(TranscriptRecord).order_by(TranscriptRecord.id.desc()).limit(100).all()
@@ -140,7 +144,7 @@ def process_end_of_class(db: Session, classroom_code: str):
         
         start_time = time.time()
         completion = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
+            model="llama3-8b-8192",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": transcript_text}
@@ -156,7 +160,7 @@ def process_end_of_class(db: Session, classroom_code: str):
             db=db,
             college_id=1, # Mock for background task
             user_id=1,
-            model="openai/gpt-oss-120b",
+            model="llama3-8b-8192",
             endpoint="summary",
             latency_ms=latency_ms,
             prompt_tokens=completion.usage.prompt_tokens,
@@ -183,18 +187,25 @@ def process_end_of_class(db: Session, classroom_code: str):
                 
             new_summary = LectureSummary(
                 classroom_id=classroom.id,
-                summary_text=summary,
+                summary_text="[Stored in Cloudflare R2]",
                 created_at=datetime.datetime.now().isoformat(),
                 transcript_s3_key=transcript_key,
-                summary_s3_key=summary_key
+                summary_s3_key=summary_key,
+                year=year,
+                semester=semester,
+                section=section
             )
             db.add(new_summary)
             db.commit()
             db.refresh(new_summary)
             
+            # Wipe the temporary Postgres transcript buffer now that it's in R2
+            db.query(TranscriptRecord).filter(TranscriptRecord.classroom_id == classroom.id).delete()
+            db.commit()
+            
             process_summary_background(db, new_summary.id)
             
-        print(f"End of Class Summary for {classroom_code}:\n", summary)
+        print(f"End of Class Summary for {classroom_code} safely archived to R2.")
     except Exception as e:
         print("End of Class AI processing failed:", e)
 
@@ -219,8 +230,8 @@ def update_live_status(
     db.commit()
     
     # If the class just ended, queue the background processing
-    if not status_update.is_live:
-        background_tasks.add_task(process_end_of_class, db, code)
+    if not status_update.is_live and status_update.store_record:
+        background_tasks.add_task(process_end_of_class, db, code, status_update.year, status_update.semester, status_update.section)
         
     return {"status": "success", "is_live": status_update.is_live}
 
@@ -237,7 +248,15 @@ def get_classrooms(
         classrooms = []
         for c in all_col_classrooms:
             course_code = c.course.code if c.course else None
-            if not course_code or course_code == "All Sections" or course_code == current_user.section:
+            is_match = False
+            if not course_code or course_code == "All Sections":
+                is_match = True
+            elif course_code == current_user.section:
+                is_match = True
+            elif current_user.section and str(current_user.semester) in course_code and current_user.section in course_code:
+                is_match = True
+                
+            if is_match:
                 classrooms.append(c)
     else:
         classrooms = db.query(Classroom).all()
@@ -277,6 +296,16 @@ def delete_classroom(
         raise HTTPException(status_code=404, detail="Classroom not found")
         
     # Manually delete related records to avoid FK constraint errors
+    from app.models.activity import LectureSummary
+    db.query(LectureSummary).filter(LectureSummary.classroom_id == classroom.id).delete()
+    
+    try:
+        from database import Timetable, Resource
+        db.query(Timetable).filter(Timetable.classroom_id == classroom.id).update({Timetable.classroom_id: None})
+        db.query(Resource).filter(Resource.classroom_id == classroom.id).delete()
+    except ImportError:
+        pass
+
     db.query(Doubt).filter(Doubt.classroom_id == classroom.id).delete()
     db.query(TranscriptRecord).filter(TranscriptRecord.classroom_id == classroom.id).delete()
     
@@ -306,6 +335,42 @@ def get_attendance(
             "student_name": a.student.full_name,
             "status": a.status,
             "engagement_score": a.engagement_score
+        })
+    return results
+
+@router.get("/my_records")
+def get_my_records(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    from app.models.activity import LectureSummary, Classroom
+    
+    query = db.query(LectureSummary).join(Classroom)
+    
+    if current_user.role and current_user.role.name == "Student":
+        if current_user.year is not None:
+            query = query.filter(LectureSummary.year == current_user.year)
+        if current_user.semester is not None:
+            query = query.filter(LectureSummary.semester == current_user.semester)
+        if current_user.section is not None:
+            query = query.filter(LectureSummary.section == current_user.section)
+            
+    if current_user.role and current_user.role.name in ["Teacher", "College Admin"]:
+        query = query.filter(Classroom.college_id == current_user.college_id)
+        
+    records = query.order_by(LectureSummary.id.desc()).all()
+    
+    results = []
+    for r in records:
+        classroom_name = r.classroom.course.name if r.classroom and r.classroom.course else f"Live Session {r.id}"
+        results.append({
+            "id": r.id,
+            "title": f"{classroom_name} - Session {r.id}",
+            "date": r.created_at,
+            "duration": "1h 0m",
+            "transcript_key": r.transcript_s3_key,
+            "summary_key": r.summary_s3_key,
+            "summary_text_fallback": r.summary_text
         })
     return results
 
@@ -449,7 +514,7 @@ def get_classroom_doubts(
     return results
 
 class DoubtAnswerRequest(BaseModel):
-    model: str = "openai/gpt-oss-120b"
+    model: str = "llama-3.3-70b-versatile"
     fallback_question: str = ""
 
 @router.post("/{code}/doubts/{doubt_id}/answer")
@@ -518,8 +583,13 @@ async def answer_doubt(
         client = Groq(api_key=settings.GROQ_API_KEY)
         
         start_time = time.time()
+        
+        actual_model = req.model
+        if actual_model == "openai/gpt-oss-120b" or "llama3-8b-8192" in actual_model:
+            actual_model = "llama-3.3-70b-versatile"
+            
         completion = client.chat.completions.create(
-            model=req.model,
+            model=actual_model,
             messages=[
                 {
                     "role": "system",
@@ -571,7 +641,7 @@ async def answer_doubt(
 
 class ChatRequest(BaseModel):
     message: str
-    model: str = "openai/gpt-oss-120b"
+    model: str = "llama3-8b-8192"
 
 @router.post("/{code}/chat")
 async def chat_classroom(

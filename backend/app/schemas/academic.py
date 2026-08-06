@@ -35,11 +35,12 @@ class Course(CourseBase):
 
 # Timetable Schemas
 class TimetableCreate(BaseModel):
-    classroom_id: int
+    classroom_id: Optional[int] = None
     day_of_week: str
     start_time: str
     end_time: str
     subject_name: str
+    room_code: Optional[str] = None
     year: int
     semester: int
     department: str
@@ -52,3 +53,15 @@ class TimetableResponse(TimetableCreate):
 
     class Config:
         from_attributes = True
+
+class TimetableUpdate(BaseModel):
+    classroom_id: Optional[int] = None
+    day_of_week: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    subject_name: Optional[str] = None
+    room_code: Optional[str] = None
+    year: Optional[int] = None
+    semester: Optional[int] = None
+    department: Optional[str] = None
+    section: Optional[str] = None

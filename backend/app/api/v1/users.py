@@ -163,6 +163,32 @@ def delete_user(
     if current_user.college_id and user_to_delete.college_id != current_user.college_id:
         raise HTTPException(status_code=403, detail="Cannot delete a user from another college.")
 
+    # Manually delete related records to avoid FK constraints
+    from app.models.activity import AuditLog, StorageFile, AIRequest, Classroom, Attendance, Doubt, LectureSession, TranscriptRecord, LectureSummary
+    from app.models.academic import Timetable, Resource
+    
+    # If teacher, delete their classrooms and all classroom-related data
+    classrooms = db.query(Classroom).filter(Classroom.teacher_id == user_to_delete.id).all()
+    for classroom in classrooms:
+        db.query(LectureSummary).filter(LectureSummary.classroom_id == classroom.id).delete()
+        db.query(Resource).filter(Resource.classroom_id == classroom.id).delete()
+        db.query(Doubt).filter(Doubt.classroom_id == classroom.id).delete()
+        db.query(TranscriptRecord).filter(TranscriptRecord.classroom_id == classroom.id).delete()
+        db.query(Timetable).filter(Timetable.classroom_id == classroom.id).update({Timetable.classroom_id: None})
+        
+        sessions = db.query(LectureSession).filter(LectureSession.classroom_id == classroom.id).all()
+        for session in sessions:
+            db.query(Attendance).filter(Attendance.lecture_id == session.id).delete()
+            db.delete(session)
+        db.delete(classroom)
+
+    # Delete other user-specific records
+    db.query(AuditLog).filter(AuditLog.user_id == user_to_delete.id).delete()
+    db.query(StorageFile).filter(StorageFile.uploaded_by == user_to_delete.id).delete()
+    db.query(AIRequest).filter(AIRequest.user_id == user_to_delete.id).delete()
+    db.query(Attendance).filter(Attendance.student_id == user_to_delete.id).delete()
+    db.query(Doubt).filter(Doubt.student_id == user_to_delete.id).delete()
+
     db.delete(user_to_delete)
     db.commit()
     

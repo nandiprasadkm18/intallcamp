@@ -17,7 +17,7 @@ const RecordsPage = () => {
     // For this demo, we'll fetch the records of the first class directly
     const loadRecords = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/v1/academic/classrooms/C1/records', {
+        const response = await fetch('http://127.0.0.1:8000/api/v1/academic/classrooms/my_records', {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         if (response.ok) {

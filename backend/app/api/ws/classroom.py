@@ -18,11 +18,11 @@ class ConnectionManager:
         # Maps classroom_code -> list of dicts: {"ws": WebSocket, "name": str}
         self.active_connections: Dict[str, List[Dict]] = {}
 
-    async def connect(self, websocket: WebSocket, room_code: str, user_name: str):
+    async def connect(self, websocket: WebSocket, room_code: str, user_name: str, role: str = "Student"):
         await websocket.accept()
         if room_code not in self.active_connections:
             self.active_connections[room_code] = []
-        self.active_connections[room_code].append({"ws": websocket, "name": user_name})
+        self.active_connections[room_code].append({"ws": websocket, "name": user_name, "role": role})
         await self.broadcast_connections_update(room_code)
 
     def disconnect(self, websocket: WebSocket, room_code: str):
@@ -36,8 +36,9 @@ class ConnectionManager:
 
     async def broadcast_connections_update(self, room_code: str):
         if room_code in self.active_connections:
-            count = len(self.active_connections[room_code])
-            active_students = [{"name": c["name"]} for c in self.active_connections[room_code]]
+            students = [c for c in self.active_connections[room_code] if c.get("role") == "Student"]
+            count = len(students)
+            active_students = [{"name": c["name"]} for c in students]
             message = {
                 "type": "connections_update",
                 "count": count,
@@ -57,7 +58,18 @@ manager = ConnectionManager()
 
 @router.websocket("/{room_code}")
 async def websocket_endpoint(websocket: WebSocket, room_code: str, user_name: str = "Anonymous", user_id: str = "0"):
-    await manager.connect(websocket, room_code, user_name)
+    role = "Student"
+    if user_id and user_id.isdigit():
+        db = SessionLocal()
+        try:
+            from app.models.user import User
+            user = db.query(User).filter(User.id == int(user_id)).first()
+            if user and user.role:
+                role = user.role.name
+        finally:
+            db.close()
+            
+    await manager.connect(websocket, room_code, user_name, role)
     try:
         while True:
             data = await websocket.receive_text()
@@ -103,6 +115,39 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, user_name: st
                     }
                 }
                 await manager.broadcast(json.dumps(broadcast_msg), room_code)
+                
+            elif message.get("type") == "request_sentiment_update":
+                db = SessionLocal()
+                try:
+                    from app.models.academic import Course
+                    classroom = db.query(Classroom).join(Course).filter(Course.code == room_code).first()
+                    doubt_count = 0
+                    if classroom:
+                        doubt_count = db.query(Doubt).filter(Doubt.classroom_id == classroom.id).count()
+                    
+                    # Base metrics
+                    students_list = [c for c in manager.active_connections.get(room_code, []) if c.get("role") == "Student"]
+                    active_students = len(students_list)
+                    
+                    # Calculate real Class Participation (Base 50%, +15% per doubt, capped at 100%)
+                    participation = min(100.0, 50.0 + (doubt_count * 15.0))
+                    
+                    # Calculate real Student Focus Index (Base 95%, -5% per active doubt, floored at 40%)
+                    focus = max(40.0, 95.0 - (doubt_count * 5.0))
+                    
+                    broadcast_msg = {
+                        "type": "sentiment_sync",
+                        "data": {
+                            "focus_level": round(focus, 1),
+                            "engagement": round(participation, 1),
+                            "active_students": active_students
+                        }
+                    }
+                    await manager.broadcast(json.dumps(broadcast_msg), room_code)
+                except Exception as e:
+                    print("Error calculating sentiment:", e)
+                finally:
+                    db.close()
                 
             # Handle request_transcript_step
             elif message.get("type") == "request_transcript_step":

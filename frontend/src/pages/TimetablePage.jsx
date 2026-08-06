@@ -26,7 +26,11 @@ const TimetablePage = () => {
       const url = user?.section 
         ? `http://127.0.0.1:8000/api/admin/timetables?section=${encodeURIComponent(user.section)}` 
         : 'http://127.0.0.1:8000/api/admin/timetables';
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${user.token || localStorage.getItem('token')}`
+        }
+      });
       if (res.ok) {
         setTimetables(await res.json());
       } else {
@@ -183,10 +187,18 @@ const TimetablePage = () => {
                             <td key={index} colSpan={colSpan} className="p-2 border-r border-gray-200 text-center relative h-full">
                               {classStartingHere ? (
                                 <div 
-                                  onClick={() => handleJoinRoom(classStartingHere.classroom_code)}
-                                  className="bg-indigo-50/60 rounded-md p-2.5 border border-indigo-100/80 flex flex-col items-center justify-center gap-1.5 h-full hover:border-indigo-300 hover:shadow-sm transition-all hover:-translate-y-0.5 cursor-pointer group"
+                                  onClick={() => {
+                                    if (user?.role !== 'Student') {
+                                      handleJoinRoom(classStartingHere.classroom_code);
+                                    }
+                                  }}
+                                  className={`bg-indigo-50/60 rounded-md p-2.5 border border-indigo-100/80 flex flex-col items-center justify-center gap-1.5 h-full transition-all group ${
+                                    user?.role !== 'Student' 
+                                      ? 'hover:border-indigo-300 hover:shadow-sm hover:-translate-y-0.5 cursor-pointer' 
+                                      : ''
+                                  }`}
                                 >
-                                  <span className="font-bold text-indigo-700 text-xs leading-tight group-hover:text-indigo-800 transition-colors">{classStartingHere.subject_name}</span>
+                                  <span className={`font-bold text-xs leading-tight transition-colors ${user?.role !== 'Student' ? 'text-indigo-700 group-hover:text-indigo-800' : 'text-indigo-700'}`}>{classStartingHere.subject_name}</span>
                                   <div className="flex flex-col items-center gap-1 mt-0.5">
                                     <div className="flex items-center gap-1.5 text-[9px] font-bold tracking-wide">
                                       <span className="bg-white px-1.5 py-0.5 rounded text-gray-600 border border-gray-200 shadow-sm inline-flex items-center gap-1">

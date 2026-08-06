@@ -19,7 +19,9 @@ import {
   Trash2,
   Eye,
   EyeOff,
-  Download
+  Download,
+  Settings,
+  X
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -64,6 +66,8 @@ const Dashboard = () => {
 
   // New enterprise role state
   const [timetables, setTimetables] = useState([]);
+  const [isTimetableEditMode, setIsTimetableEditMode] = useState(false);
+  const [editingTimetableSlot, setEditingTimetableSlot] = useState(null);
   const [studentMetrics, setStudentMetrics] = useState({
     attendance_percent: 0.0,
     lectures_attended: 0,
@@ -110,10 +114,10 @@ const Dashboard = () => {
   const [ttFilterSection, setTtFilterSection] = useState("A");
 
   // Admin Create Timetable schedule form state
-  const [schedRoomId, setSchedRoomId] = useState("");
+  const [schedRoomName, setSchedRoomName] = useState("");
   const [schedDay, setSchedDay] = useState("Monday");
-  const [schedStart, setSchedStart] = useState("09:00");
-  const [schedEnd, setSchedEnd] = useState("10:30");
+  const [schedStart, setSchedStart] = useState("09:00 AM");
+  const [schedEnd, setSchedEnd] = useState("10:30 AM");
   const [schedSubject, setSchedSubject] = useState("");
   const [schedYear, setSchedYear] = useState("4");
   const [schedSem, setSchedSem] = useState("7");
@@ -263,7 +267,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (user?.role === 'College Admin' && adminActiveTab === 'schedules') {
-      loadTimetables();
+      loadTimetables(); // eslint-disable-line react-hooks/set-state-in-effect
     }
   }, [adminActiveTab]);
 
@@ -325,9 +329,9 @@ const Dashboard = () => {
   useEffect(() => {
     if (user?.role === 'Super Admin') return;
 
-    loadRooms();
-    loadTimetables();
-    loadAnnouncements();
+    loadRooms(); // eslint-disable-line react-hooks/set-state-in-effect
+    loadTimetables(); // eslint-disable-line react-hooks/set-state-in-effect
+    loadAnnouncements(); // eslint-disable-line react-hooks/set-state-in-effect
     if (user?.role === 'College Admin') {
       loadAdminData();
     }
@@ -397,6 +401,52 @@ const Dashboard = () => {
       loadTimetables();
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const handleUpdateTimetable = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/admin/timetables/${editingTimetableSlot.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          subject_name: editingTimetableSlot.subject_name,
+          start_time: editingTimetableSlot.start_time,
+          end_time: editingTimetableSlot.end_time
+        }),
+      });
+      if (response.ok) {
+        setEditingTimetableSlot(null);
+        loadTimetables();
+      } else {
+        alert("Failed to update timetable");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteTimetable = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this class slot?")) return;
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/admin/timetables/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        setEditingTimetableSlot(null);
+        loadTimetables();
+      } else {
+        alert("Failed to delete timetable");
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -532,11 +582,32 @@ const Dashboard = () => {
     e.preventDefault();
     setError("");
     setSuccess("");
-    if (!schedRoomId || !schedSubject || !schedStart || !schedEnd) {
-      setError("Please fill out all fields");
+    if (!schedSubject || !schedStart || !schedEnd) {
+      setError("Please fill out subject and time fields");
       return;
     }
     try {
+      let resolvedRoomId = null;
+      if (schedRoomName && schedRoomName.trim() !== '') {
+        const existingRoom = classrooms.find(c => c.name.toLowerCase() === schedRoomName.toLowerCase() || c.code.toLowerCase() === schedRoomName.toLowerCase());
+        if (existingRoom) {
+          resolvedRoomId = existingRoom.id;
+        } else {
+          const resRoom = await fetch('http://127.0.0.1:8000/api/v1/academic/classrooms', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({ name: schedRoomName, code: schedRoomName }),
+          });
+          if (!resRoom.ok) throw new Error("Failed to auto-create classroom");
+          const newRoomData = await resRoom.json();
+          resolvedRoomId = newRoomData.id;
+          loadRooms();
+        }
+      }
+
       const response = await fetch('http://127.0.0.1:8000/api/admin/timetables', {
         method: 'POST',
         headers: {
@@ -544,7 +615,7 @@ const Dashboard = () => {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({
-          classroom_id: parseInt(schedRoomId),
+          classroom_id: resolvedRoomId,
           day_of_week: schedDay,
           start_time: schedStart,
           end_time: schedEnd,
@@ -560,7 +631,7 @@ const Dashboard = () => {
         throw new Error(data.detail || "Failed to create schedule");
       }
       setSuccess("Timetable schedule block successfully created!");
-      setSchedRoomId("");
+      setSchedRoomName("");
       setSchedSubject("");
       loadTimetables();
     } catch (err) {
@@ -662,7 +733,45 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main List Classrooms */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Lecture Classrooms removed per user request */}
+            {/* Active Classes List */}
+            <div className="academic-card p-6">
+              <h4 className="font-semibold text-base text-gray-800 border-b border-gray-200 pb-4 mb-5 flex justify-between items-center">
+                <span>Active Classes</span>
+                <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full font-bold">{classrooms.length} Classes</span>
+              </h4>
+              {classrooms.length === 0 ? (
+                <p className="text-sm text-gray-500 italic text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-200">No classes created yet. Create one from the panel on the right.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {classrooms.map(room => (
+                    <div key={room.id} className="border border-gray-200 rounded-lg p-5 hover:shadow-md hover:border-indigo-200 transition-all group bg-white">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="space-y-1">
+                          <h5 className="font-bold text-gray-800 text-base">{room.name}</h5>
+                          <span className="inline-block text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-100">{room.code}</span>
+                        </div>
+                        <button 
+                          onClick={() => handleDeleteClassroom(room.code)} 
+                          className="text-gray-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors"
+                          title="Delete Class"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      
+                      <div className="mt-5">
+                        <button 
+                          onClick={() => handleJoinRoom(room.code)}
+                          className="w-full bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white border border-indigo-200 text-xs font-bold py-2 rounded-md flex justify-center items-center gap-1.5 transition-all shadow-sm group-hover:shadow"
+                        >
+                          <Play className="h-3.5 w-3.5" /> Enter Classroom
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Performance Analytics Card */}
             <div className="academic-card p-6">
@@ -1624,16 +1733,13 @@ const Dashboard = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Classroom</label>
-                      <select
-                        value={schedRoomId}
-                        onChange={(e) => setSchedRoomId(e.target.value)}
+                      <input
+                        type="text"
+                        value={schedRoomName}
+                        onChange={(e) => setSchedRoomName(e.target.value)}
                         className="w-full bg-slate-955 border border-gray-200 rounded pl-3 pr-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
-                      >
-                        <option value="">-- Choose Classroom --</option>
-                        {classrooms.map(c => (
-                          <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
-                        ))}
-                      </select>
+                        placeholder="e.g. M408"
+                      />
                     </div>
                     <div>
                       <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Subject Description</label>
@@ -1756,7 +1862,16 @@ const Dashboard = () => {
 
             <div className="academic-card p-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-200 pb-4 mb-4 gap-4">
-                <h4 className="font-semibold text-sm text-gray-800">Master Academic Schedule</h4>
+                <div className="flex items-center gap-4">
+                  <h4 className="font-semibold text-sm text-gray-800">Master Academic Schedule</h4>
+                  {user?.role === 'College Admin' && (
+                    <label className="flex items-center gap-2 cursor-pointer border border-indigo-200 bg-indigo-50 px-3 py-1 rounded-full">
+                      <input type="checkbox" checked={isTimetableEditMode} onChange={e => setIsTimetableEditMode(e.target.checked)} className="sr-only peer" />
+                      <div className="w-7 h-4 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-indigo-600 relative"></div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-900">Edit Mode</span>
+                    </label>
+                  )}
+                </div>
                 
                 <div className="flex flex-wrap items-center gap-2">
                   <select
@@ -1826,13 +1941,13 @@ const Dashboard = () => {
                   
                   const parseTime = (timeStr) => {
                     if (!timeStr) return 0;
-                    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+                    const match = timeStr.match(/(\d+):(\d+)(?:\s*(AM|PM))?/i);
                     if (!match) return 0;
                     let [, hours, minutes, period] = match;
                     hours = parseInt(hours, 10);
                     minutes = parseInt(minutes, 10);
-                    if (period.toUpperCase() === 'PM' && hours !== 12) hours += 12;
-                    if (period.toUpperCase() === 'AM' && hours === 12) hours = 0;
+                    if (period && period.toUpperCase() === 'PM' && hours !== 12) hours += 12;
+                    if (period && period.toUpperCase() === 'AM' && hours === 12) hours = 0;
                     return hours * 60 + minutes;
                   };
 
@@ -1889,7 +2004,7 @@ const Dashboard = () => {
                                   }
                                 }
 
-                                const classStartingHere = timetables.find(t => t.day_of_week === day && t.start_time === slot.start);
+                                const classStartingHere = timetables.find(t => t.day_of_week === day && parseTime(t.start_time) === parseTime(slot.start));
                                 let colSpan = 1;
                                 
                                 if (classStartingHere) {
@@ -1911,7 +2026,12 @@ const Dashboard = () => {
                                 return (
                                   <td key={index} colSpan={colSpan} className="p-2 border-r border-gray-200 text-center relative h-full">
                                     {classStartingHere ? (
-                                      <div className="bg-indigo-50/60 rounded-md p-2.5 border border-indigo-100/80 flex flex-col items-center justify-center gap-1.5 h-full hover:border-indigo-300 hover:shadow-sm transition-all hover:-translate-y-0.5 cursor-default group">
+                                      <div 
+                                        className={`bg-indigo-50/60 rounded-md p-2.5 border border-indigo-100/80 flex flex-col items-center justify-center gap-1.5 h-full hover:border-indigo-300 hover:shadow-sm transition-all hover:-translate-y-0.5 group ${isTimetableEditMode ? 'cursor-pointer ring-2 ring-transparent hover:ring-indigo-400' : 'cursor-default'}`}
+                                        onClick={() => {
+                                          if (isTimetableEditMode) setEditingTimetableSlot(classStartingHere);
+                                        }}
+                                      >
                                         <span className="font-bold text-indigo-700 text-xs leading-tight group-hover:text-indigo-800 transition-colors">{classStartingHere.subject_name}</span>
                                         <div className="flex items-center gap-1.5 text-[9px] font-bold tracking-wide">
                                           <span className="bg-white px-1.5 py-0.5 rounded text-gray-600 border border-gray-200 shadow-sm">{classStartingHere.classroom_code}</span>
@@ -1972,6 +2092,47 @@ const Dashboard = () => {
             </div>
           </div>
         )}
+        {editingTimetableSlot && (
+          <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-[99] flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <h3 className="font-semibold text-gray-800">Edit Timetable Slot</h3>
+                <button onClick={() => setEditingTimetableSlot(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <form onSubmit={handleUpdateTimetable} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Subject Name</label>
+                  <input type="text" value={editingTimetableSlot.subject_name} onChange={e => setEditingTimetableSlot({...editingTimetableSlot, subject_name: e.target.value})} className="w-full bg-slate-50 border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-indigo-500" required />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Start Time</label>
+                    <input type="text" value={editingTimetableSlot.start_time} onChange={e => setEditingTimetableSlot({...editingTimetableSlot, start_time: e.target.value})} className="w-full bg-slate-50 border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-indigo-500" required />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">End Time</label>
+                    <input type="text" value={editingTimetableSlot.end_time} onChange={e => setEditingTimetableSlot({...editingTimetableSlot, end_time: e.target.value})} className="w-full bg-slate-50 border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-indigo-500" required />
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-4 border-t border-gray-100 mt-6">
+                  <button type="button" onClick={() => handleDeleteTimetable(editingTimetableSlot.id)} className="px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded text-sm font-semibold transition-colors">
+                    Delete Slot
+                  </button>
+                  <div className="flex-1"></div>
+                  <button type="button" onClick={() => setEditingTimetableSlot(null)} className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded text-sm font-semibold transition-colors">
+                    Cancel
+                  </button>
+                  <button type="submit" className="px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded text-sm font-semibold transition-colors">
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
       </div>
     );
   };

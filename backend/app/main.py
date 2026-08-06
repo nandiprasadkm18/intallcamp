@@ -22,7 +22,8 @@ app.add_middleware(
 # API Routers
 from app.api.v1 import auth, users
 from app.api.v1.tenant import departments, colleges, analytics
-from app.api.v1.academic import courses, classrooms, timetables, resources
+from app.api.v1.academic import courses, classrooms, resources, timetables
+from app.api.v1.ai import compiler
 from app.api.v1 import admin_dashboard
 from app.api.ws import classroom as ws_classroom
 
@@ -34,6 +35,7 @@ app.include_router(analytics.router, prefix=f"{settings.API_V1_STR}/tenant/analy
 app.include_router(courses.router, prefix=f"{settings.API_V1_STR}/academic/courses", tags=["Academic Structure"])
 app.include_router(classrooms.router, prefix=f"{settings.API_V1_STR}/academic/classrooms", tags=["Academic Classrooms"])
 app.include_router(resources.router, prefix=f"{settings.API_V1_STR}/academic/classrooms", tags=["Academic Resources"])
+app.include_router(compiler.router, prefix=f"{settings.API_V1_STR}/ai", tags=["AI Compiler Workspace"])
 app.include_router(timetables.router, prefix="/api/admin/timetables", tags=["Timetables"])
 app.include_router(admin_dashboard.router, prefix="/api/admin/system", tags=["Admin Dashboard"])
 

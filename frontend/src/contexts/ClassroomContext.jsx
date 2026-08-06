@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext';
 
@@ -56,14 +57,14 @@ export const ClassroomProvider = ({ children }) => {
         setTranscripts(transData);
       }
 
-      // 3. Fetch doubt board log (mock for now or implement if needed)
-      // const resDoubts = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${code}/doubts`, {
-      //   headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      // });
-      // if (resDoubts.ok) {
-      //   const doubtsData = await resDoubts.json();
-      //   setDoubts(doubtsData);
-      // }
+      // 3. Fetch doubt board log
+      const resDoubts = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${code}/doubts`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (resDoubts.ok) {
+        const doubtsData = await resDoubts.json();
+        setDoubts(doubtsData);
+      }
 
       // 4. Fetch subject resources
       const resRes = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${code}/resources`, {
@@ -219,7 +220,7 @@ export const ClassroomProvider = ({ children }) => {
   };
 
   // Actions broadcasted to server over WebSocket
-  const startLiveClassroomSession = async (code, isLive) => {
+  const startLiveClassroomSession = async (code, isLive, storeRecord = false, year = null, semester = null, section = null) => {
     try {
       const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${code}/live`, {
         method: 'PUT',
@@ -227,7 +228,13 @@ export const ClassroomProvider = ({ children }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({ is_live: isLive }),
+        body: JSON.stringify({ 
+          is_live: isLive,
+          store_record: storeRecord,
+          year: year ? parseInt(year) : null,
+          semester: semester ? parseInt(semester) : null,
+          section: section || null
+        }),
       });
       if (response.ok) {
         setActiveClassroom(prev => prev ? { ...prev, is_live: isLive } : null);

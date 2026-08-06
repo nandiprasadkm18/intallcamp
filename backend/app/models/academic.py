@@ -69,6 +69,7 @@ class Timetable(Base):
     start_time = Column(String, nullable=False)
     end_time = Column(String, nullable=False)
     subject_name = Column(String, nullable=False)
+    room_code = Column(String, nullable=True)
     year = Column(Integer, nullable=False)
     semester = Column(Integer, nullable=False)
     department = Column(String, nullable=False)

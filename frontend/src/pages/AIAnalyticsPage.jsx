@@ -64,6 +64,15 @@ const AIAnalyticsPage = () => {
   }
 
   const { overview, performance_chart, models_chart } = data;
+  
+  // Determine most active model
+  let activeModel = "No Active Models";
+  if (models_chart && models_chart.length > 0) {
+    const sorted = [...models_chart].sort((a, b) => b.value - a.value);
+    if (sorted[0].value > 0) {
+        activeModel = sorted[0].name;
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -73,7 +82,7 @@ const AIAnalyticsPage = () => {
           <div className="flex justify-between items-center">
             <div>
               <p className="text-xs uppercase font-extrabold tracking-wider text-gray-600">Active AI Model</p>
-              <h3 className="text-xl font-bold text-gray-900 mt-2">Llama-3-Academic</h3>
+              <h3 className="text-xl font-bold text-gray-900 mt-2">{activeModel}</h3>
             </div>
             <div className="p-3 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-lg">
               <BrainCircuit className="h-6 w-6" />

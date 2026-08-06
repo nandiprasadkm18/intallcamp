@@ -101,6 +101,11 @@ def process_document_background(db: Session, resource_id: int, job_id: int):
         db.commit()
     finally:
         try:
+            if 'doc' in locals():
+                doc.close()
+        except Exception:
+            pass
+        try:
             if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
         except Exception:

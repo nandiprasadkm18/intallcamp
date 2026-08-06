@@ -92,19 +92,35 @@ const LiveClassroom = ({ setCurrentPage }) => {
   const [announceTitle, setAnnounceTitle] = useState("");
   const [announceBody, setAnnounceBody] = useState("");
   
-  // Code editor local state
   const [localCode, setLocalCode] = useState(code);
   const [selectedLang, setSelectedLang] = useState(language);
+  
+  // Compiler state
+  const [compilerOutput, setCompilerOutput] = useState("");
+  const [compilerError, setCompilerError] = useState(false);
+  const [isCompiling, setIsCompiling] = useState(false);
+  const [aiFixExplanation, setAiFixExplanation] = useState("");
+  const [aiFixedCode, setAiFixedCode] = useState("");
+  const [isFixing, setIsFixing] = useState(false);
+
+  // End Class Modal state
+  const [showEndModal, setShowEndModal] = useState(false);
+  const [endModalData, setEndModalData] = useState({
+    store: true,
+    year: "1",
+    semester: "1",
+    section: "A"
+  });
 
   const transcriptsEndRef = useRef(null);
 
   // Sync incoming code changes from socket into local editor state
   useEffect(() => {
-    setLocalCode(code);
+    setLocalCode(code); // eslint-disable-line react-hooks/set-state-in-effect
   }, [code]);
 
   useEffect(() => {
-    setSelectedLang(language);
+    setSelectedLang(language); // eslint-disable-line react-hooks/set-state-in-effect
   }, [language]);
 
   // Keep scrollbar pinned to bottom of transcript log during live streams
@@ -207,13 +223,66 @@ const LiveClassroom = ({ setCurrentPage }) => {
   const handleCodeChange = (e) => {
     const newCode = e.target.value;
     setLocalCode(newCode);
-    broadcastCodeChange(newCode, selectedLang);
   };
 
   const handleLangChange = (e) => {
     const lang = e.target.value;
     setSelectedLang(lang);
-    broadcastCodeChange(localCode, lang);
+  };
+
+  const handleRunCode = async () => {
+    if (selectedLang === "plain_text" || !localCode.trim()) return;
+    setIsCompiling(true);
+    setCompilerOutput("");
+    setCompilerError(false);
+    setAiFixExplanation("");
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/v1/ai/compiler/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language: selectedLang, code: localCode })
+      });
+      const data = await res.json();
+      if (data.exit_code !== 0 || data.error) {
+        setCompilerError(true);
+        setCompilerOutput(data.error || data.output);
+      } else {
+        setCompilerError(false);
+        setCompilerOutput(data.output || "Program finished with no output.");
+      }
+    } catch (e) {
+      setCompilerError(true);
+      setCompilerOutput("Failed to connect to execution server.");
+    } finally {
+      setIsCompiling(false);
+    }
+  };
+
+  const handleAiFix = async () => {
+    setIsFixing(true);
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/v1/ai/compiler/fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language: selectedLang, code: localCode, error: compilerOutput, model: simLLM })
+      });
+      const data = await res.json();
+      setAiFixExplanation(data.explanation);
+      setAiFixedCode(data.fixed_code);
+    } catch (e) {
+      setAiFixExplanation("Failed to connect to AI server.");
+    } finally {
+      setIsFixing(false);
+    }
+  };
+
+  const applyAiFix = () => {
+    setLocalCode(aiFixedCode);
+    broadcastCodeChange(aiFixedCode, selectedLang);
+    setAiFixExplanation("");
+    setAiFixedCode("");
+    setCompilerError(false);
+    setCompilerOutput("");
   };
 
   const triggerSelfExplainConcept = () => {
@@ -302,14 +371,7 @@ const LiveClassroom = ({ setCurrentPage }) => {
 
           {isTeacher && (
             <button
-              onClick={() => { 
-                const confirmEnd = window.confirm("Are you sure you want to end the class and store the transcription to Cloudflare?");
-                if (confirmEnd) {
-                  startLiveClassroomSession(activeClassroom.code, false);
-                  leaveClassroom(); 
-                  navigate('/dashboard'); 
-                }
-              }}
+              onClick={() => setShowEndModal(true)}
               className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors shadow-sm"
             >
               End Class
@@ -418,10 +480,29 @@ const LiveClassroom = ({ setCurrentPage }) => {
                     disabled={!isTeacher}
                     className="bg-white border border-gray-200 rounded text-gray-600 font-bold text-[10px] px-2.5 py-1 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
                   >
-                    <option value="javascript">JavaScript</option>
+                    <option value="plain_text">Plain Text</option>
                     <option value="python">Python</option>
+                    <option value="c">C</option>
                     <option value="cpp">C++</option>
+                    <option value="java">Java</option>
                   </select>
+                  {isTeacher && (
+                    <button
+                      onClick={() => broadcastCodeChange(localCode, selectedLang)}
+                      className="ml-3 px-3 py-1 bg-indigo-500 hover:bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider rounded transition-colors"
+                    >
+                      Share Code
+                    </button>
+                  )}
+                  {isTeacher && selectedLang !== "plain_text" && (
+                    <button
+                      onClick={handleRunCode}
+                      disabled={isCompiling}
+                      className="ml-3 px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-[10px] font-bold uppercase tracking-wider rounded transition-colors disabled:opacity-50"
+                    >
+                      {isCompiling ? "Running..." : "Run Code"}
+                    </button>
+                  )}
                   {!isTeacher && (
                     <span className="px-2 py-0.5 rounded bg-white border border-gray-200 text-[9px] font-bold text-gray-500 uppercase tracking-widest">
                       Read-Only View
@@ -435,14 +516,57 @@ const LiveClassroom = ({ setCurrentPage }) => {
                 value={localCode}
                 onChange={handleCodeChange}
                 disabled={!isTeacher}
-                className="w-full flex-1 min-h-[260px] max-h-[300px] font-mono text-xs text-gray-700 bg-white p-4 rounded-lg border border-gray-200 focus:outline-none focus:border-indigo-500/80 resize-none leading-relaxed select-text"
+                className={`w-full flex-1 min-h-[200px] max-h-[250px] font-mono text-xs text-gray-700 bg-white p-4 rounded-lg border border-gray-200 focus:outline-none focus:border-indigo-500/80 resize-none leading-relaxed select-text ${compilerOutput ? 'mb-2' : ''}`}
                 placeholder={isTeacher ? "// Type collaborative lecture code snippet here..." : "// Awaiting instructor's code broadcast..."}
               />
 
+              {/* Terminal Output */}
+              {compilerOutput && (
+                <div className="mt-2 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden flex flex-col max-h-[180px]">
+                  <div className="flex items-center justify-between px-3 py-1.5 bg-gray-800 border-b border-gray-700">
+                    <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Execution Output</span>
+                    {isTeacher && compilerError && (
+                      <button
+                        onClick={handleAiFix}
+                        disabled={isFixing}
+                        className="flex items-center space-x-1 px-2 py-0.5 bg-indigo-500 hover:bg-indigo-600 text-white text-[9px] font-bold rounded disabled:opacity-50"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        <span>{isFixing ? "Fixing..." : "AI Fix"}</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="p-3 overflow-y-auto">
+                    <pre className={`text-[11px] font-mono whitespace-pre-wrap ${compilerError ? 'text-red-400' : 'text-green-400'}`}>
+                      {compilerOutput}
+                    </pre>
+                  </div>
+                </div>
+              )}
+
+              {/* AI Fix Explanation Panel */}
+              {aiFixExplanation && (
+                <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex flex-col space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <BrainCircuit className="w-4 h-4 text-indigo-500" />
+                      <span className="text-xs font-bold text-gray-800">AI Diagnostic</span>
+                    </div>
+                    <button
+                      onClick={applyAiFix}
+                      className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold uppercase rounded transition-colors"
+                    >
+                      Apply Fix
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-relaxed">{aiFixExplanation}</p>
+                </div>
+              )}
+
               <div className="text-[10px] text-gray-500 font-semibold mt-3">
                 {isTeacher 
-                  ? "✓ Active broadcast mode enabled. Your changes sync instantly to all classrooms." 
-                  : "✓ Integrated listener active. Syncing changes from instructor."
+                  ? "✓ Workspace ready. Click 'Share Code' to broadcast to students." 
+                  : "✓ Integrated listener active. Waiting for instructor broadcast."
                 }
               </div>
             </div>
@@ -703,6 +827,91 @@ const LiveClassroom = ({ setCurrentPage }) => {
           </div>
         </div>
       </div>
+
+      {/* End Class Modal */}
+      {showEndModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-200">
+            <h3 className="text-xl font-bold text-gray-800 mb-2">End Live Session</h3>
+            <p className="text-sm text-gray-500 mb-6">Do you want to store the transcript and summary for this session?</p>
+            
+            <div className="space-y-4 mb-6">
+              <label className="flex items-center space-x-2 text-sm font-semibold text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={endModalData.store}
+                  onChange={(e) => setEndModalData({ ...endModalData, store: e.target.checked })}
+                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span>Store Session Records</span>
+              </label>
+
+              {endModalData.store && (
+                <div className="grid grid-cols-3 gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Year</label>
+                    <select
+                      value={endModalData.year}
+                      onChange={(e) => setEndModalData({ ...endModalData, year: e.target.value })}
+                      className="w-full bg-white border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
+                    >
+                      {[1, 2, 3, 4].map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Semester</label>
+                    <select
+                      value={endModalData.semester}
+                      onChange={(e) => setEndModalData({ ...endModalData, semester: e.target.value })}
+                      className="w-full bg-white border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 mb-1">Section</label>
+                    <select
+                      value={endModalData.section}
+                      onChange={(e) => setEndModalData({ ...endModalData, section: e.target.value })}
+                      className="w-full bg-white border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
+                    >
+                      {['A', 'B', 'C', 'D'].map(sec => <option key={sec} value={sec}>{sec}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowEndModal(false)}
+                className="px-4 py-2 rounded bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 text-xs font-bold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  startLiveClassroomSession(
+                    activeClassroom.code, 
+                    false, 
+                    endModalData.store, 
+                    endModalData.year, 
+                    endModalData.semester, 
+                    endModalData.section
+                  );
+                  leaveClassroom();
+                  setShowEndModal(false);
+                  navigate('/dashboard');
+                }}
+                className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors shadow-sm"
+              >
+                Confirm End Class
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

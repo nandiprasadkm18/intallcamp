@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext(null);
@@ -18,36 +19,40 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token') || null);
 
   useEffect(() => {
+    const fetchUserProfile = async (authToken) => {
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/v1/auth/me', {
+          headers: {
+            'Authorization': `Bearer ${authToken}`
+          }
+        });
+        if (response.ok) {
+          const userData = await response.json();
+          setUser(normalizeUser(userData));
+        } else {
+          setToken(null);
+          setUser(null);
+          localStorage.removeItem('token');
+        }
+      } catch (error) {
+        console.error("Error fetching user profile:", error);
+        setToken(null);
+        setUser(null);
+        localStorage.removeItem('token');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     if (token) {
       localStorage.setItem('token', token);
       fetchUserProfile(token);
     } else {
       localStorage.removeItem('token');
-      setUser(null);
+      setUser(null); // eslint-disable-line react-hooks/set-state-in-effect
       setLoading(false);
     }
   }, [token]);
-
-  const fetchUserProfile = async (authToken) => {
-    try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      });
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(normalizeUser(userData));
-      } else {
-        logout();
-      }
-    } catch (error) {
-      console.error("Error fetching user profile:", error);
-      logout();
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const login = async (email, password) => {
     try {

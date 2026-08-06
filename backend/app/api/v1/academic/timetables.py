@@ -17,7 +17,8 @@ def get_timetables(
     year: Optional[int] = Query(None),
     semester: Optional[int] = Query(None),
     department: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     query = db.query(Timetable)
     
@@ -35,8 +36,9 @@ def get_timetables(
     res = []
     for s in schedules:
         # Join classroom code via Course relationship (from Classroom)
-        classroom_code = s.classroom.course.code if s.classroom and s.classroom.course else "Unknown"
-        classroom_name = s.classroom.course.name if s.classroom and s.classroom.course else "Unknown"
+        # Use independent room_code if available, fallback to relation, else Unknown
+        classroom_code = s.room_code or (s.classroom.course.code if s.classroom and s.classroom.course else "Unknown")
+        classroom_name = s.classroom.course.name if s.classroom and s.classroom.course else "Scheduled Class"
         
         sem_map = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th", 6: "6th", 7: "7th", 8: "8th"}
         sem_str = sem_map.get(s.semester, f"{s.semester}th")
@@ -67,13 +69,15 @@ def create_timetable(
     user: User = Depends(get_current_user)
 ):
     # Authorization checks could be expanded here
-    if user.role != "College Admin" and user.role != "Super Admin":
+    if user.role.name != "College Admin" and user.role.name != "Super Admin":
         raise HTTPException(status_code=403, detail="Only admins can schedule timetables")
         
-    # Verify classroom exists
-    classroom = db.query(Classroom).filter(Classroom.id == data.classroom_id).first()
-    if not classroom:
-        raise HTTPException(status_code=404, detail="Selected classroom does not exist")
+    # Verify classroom exists if provided
+    classroom = None
+    if data.classroom_id is not None:
+        classroom = db.query(Classroom).filter(Classroom.id == data.classroom_id).first()
+        if not classroom:
+            raise HTTPException(status_code=404, detail="Selected classroom does not exist")
         
     new_timetable = Timetable(
         classroom_id=data.classroom_id,
@@ -81,6 +85,7 @@ def create_timetable(
         start_time=data.start_time,
         end_time=data.end_time,
         subject_name=data.subject_name,
+        room_code=classroom.course.code if classroom and classroom.course else None,
         year=data.year,
         semester=data.semester,
         department=data.department,
@@ -106,6 +111,77 @@ def create_timetable(
         semester=new_timetable.semester,
         department=new_timetable.department,
         section=res_section_string,
-        classroom_code=classroom.course.code if classroom.course else "Unknown",
-        classroom_name=classroom.course.name if classroom.course else "Unknown"
+        classroom_code=new_timetable.room_code or (classroom.course.code if classroom and classroom.course else "Unknown"),
+        classroom_name=classroom.course.name if classroom and classroom.course else "Unknown"
     )
+
+from app.schemas.academic import TimetableUpdate
+
+@router.put("/{timetable_id}", response_model=TimetableResponse)
+def update_timetable(
+    timetable_id: int,
+    data: TimetableUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    if user.role.name != "College Admin" and user.role.name != "Super Admin":
+        raise HTTPException(status_code=403, detail="Only admins can edit timetables")
+        
+    timetable = db.query(Timetable).filter(Timetable.id == timetable_id).first()
+    if not timetable:
+        raise HTTPException(status_code=404, detail="Timetable slot not found")
+        
+    if data.classroom_id is not None:
+        classroom = db.query(Classroom).filter(Classroom.id == data.classroom_id).first()
+        if not classroom:
+            raise HTTPException(status_code=404, detail="Selected classroom does not exist")
+        timetable.classroom_id = data.classroom_id
+
+    if data.day_of_week is not None: timetable.day_of_week = data.day_of_week
+    if data.start_time is not None: timetable.start_time = data.start_time
+    if data.end_time is not None: timetable.end_time = data.end_time
+    if data.subject_name is not None: timetable.subject_name = data.subject_name
+    if data.year is not None: timetable.year = data.year
+    if data.semester is not None: timetable.semester = data.semester
+    if data.department is not None: timetable.department = data.department
+    if data.section is not None: timetable.section = data.section
+
+    db.commit()
+    db.refresh(timetable)
+    
+    sem_map = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th", 6: "6th", 7: "7th", 8: "8th"}
+    sem_str = sem_map.get(timetable.semester, f"{timetable.semester}th")
+    res_section_string = f"{sem_str} Sem {timetable.section}"
+    
+    return TimetableResponse(
+        id=timetable.id,
+        classroom_id=timetable.classroom_id,
+        day_of_week=timetable.day_of_week,
+        start_time=timetable.start_time,
+        end_time=timetable.end_time,
+        subject_name=timetable.subject_name,
+        year=timetable.year,
+        semester=timetable.semester,
+        department=timetable.department,
+        section=res_section_string,
+        classroom_code=timetable.room_code or (timetable.classroom.course.code if timetable.classroom and timetable.classroom.course else "Unknown"),
+        classroom_name=timetable.classroom.course.name if timetable.classroom and timetable.classroom.course else "Scheduled Class"
+    )
+
+@router.delete("/{timetable_id}")
+def delete_timetable(
+    timetable_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    if user.role.name != "College Admin" and user.role.name != "Super Admin":
+        raise HTTPException(status_code=403, detail="Only admins can delete timetables")
+        
+    timetable = db.query(Timetable).filter(Timetable.id == timetable_id).first()
+    if not timetable:
+        raise HTTPException(status_code=404, detail="Timetable slot not found")
+        
+    db.delete(timetable)
+    db.commit()
+    return {"message": "Timetable slot deleted successfully"}
+
