@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Tv, Brain, QrCode, FolderOpen, Settings, LogOut,
   User as UserIcon, Circle, GraduationCap, Calendar, BookOpen,
   Building2, Users as UsersIcon, Shield, CreditCard, Star, HardDrive, 
-  BarChart, Megaphone, FileText, Ticket, DollarSign, Activity, Bell, Search, Video
+  BarChart, Megaphone, FileText, Ticket, DollarSign, Activity, Bell, Search, Video, Menu, X
 } from 'lucide-react';
 import ProfileModal from './ProfileModal';
 
@@ -14,6 +14,7 @@ const Layout = () => {
   const { user, logout } = useAuth();
   const { activeClassroom } = useClassroom();
   const [isProfileOpen, setIsProfileOpen] = React.useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const location = useLocation();
   
   // Helper to format the path for header title
@@ -52,8 +53,23 @@ const Layout = () => {
 
   return (
     <div className="h-screen flex bg-white text-gray-900 overflow-hidden">
+      {/* Mobile Sidebar Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 border-r border-gray-200 bg-gray-50 flex flex-col shrink-0">
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-gray-200 bg-gray-50 flex flex-col transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        {/* Mobile close button */}
+        <button 
+          className="absolute top-4 right-4 md:hidden text-gray-500 hover:text-gray-900"
+          onClick={() => setIsMobileMenuOpen(false)}
+        >
+          <X className="h-6 w-6" />
+        </button>
         {/* Brand Logo */}
         <div className="p-6 border-b border-gray-200 flex items-center space-x-3">
           <GraduationCap className="h-8 w-8 text-black" />
@@ -136,10 +152,18 @@ const Layout = () => {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         {/* Header */}
-        <header className="h-16 border-b border-gray-200 bg-white/80 backdrop-blur-md px-8 flex items-center justify-between shrink-0">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 capitalize">{currentPathName.replace('-', ' ')}</h2>
-            {user?.role !== 'Super Admin' && <p className="text-xs text-gray-500">INTELLCAMP Enterprise Academic Portal</p>}
+        <header className="h-16 border-b border-gray-200 bg-white/80 backdrop-blur-md px-4 md:px-8 flex items-center justify-between shrink-0">
+          <div className="flex items-center space-x-3">
+            <button 
+              className="md:hidden text-gray-500 hover:text-gray-900"
+              onClick={() => setIsMobileMenuOpen(true)}
+            >
+              <Menu className="h-6 w-6" />
+            </button>
+            <div>
+              <h2 className="text-lg md:text-xl font-bold text-gray-900 capitalize truncate">{currentPathName.replace('-', ' ')}</h2>
+              {user?.role !== 'Super Admin' && <p className="hidden md:block text-xs text-gray-500">INTELLCAMP Enterprise Academic Portal</p>}
+            </div>
           </div>
           
           <div className="flex items-center space-x-6">

@@ -1295,7 +1295,7 @@ const Dashboard = () => {
                 )}
                 {/* Year, Semester, Section (Only for Student Register) */}
                 {adminUserRole === 'student' && (
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                     <div>
                       <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Year</label>
                       <select
@@ -1579,7 +1579,7 @@ const Dashboard = () => {
 
                     <div>
                       <label className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-500 mb-2">Fields to Export</label>
-                      <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-gray-700">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs font-semibold text-gray-700">
                         {Object.keys(exportFields).map(field => (
                           <label key={field} className="flex items-center space-x-2 cursor-pointer">
                             <input
@@ -1696,7 +1696,7 @@ const Dashboard = () => {
               <div className="academic-card p-6 space-y-4">
                 <h4 className="font-semibold text-sm text-gray-800 border-b border-gray-200 pb-4">Initialize Department Structure</h4>
                 <form onSubmit={handleAdminCreateDept} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Department Name</label>
                       <input
@@ -1746,7 +1746,7 @@ const Dashboard = () => {
               <div className="academic-card p-6 space-y-4">
                 <h4 className="font-semibold text-sm text-gray-800 border-b border-gray-200 pb-4">Schedule Timetable Block</h4>
                 <form onSubmit={handleAdminCreateSchedule} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Classroom</label>
                       <input
@@ -1770,7 +1770,7 @@ const Dashboard = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Year</label>
                       <select
@@ -1829,7 +1829,7 @@ const Dashboard = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Day of Week</label>
                       <select

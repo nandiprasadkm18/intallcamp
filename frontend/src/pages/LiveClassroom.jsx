@@ -332,7 +332,7 @@ const LiveClassroom = ({ setCurrentPage }) => {
           </div>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-3">
           {isTeacher ? (
             <button
               onClick={() => {
