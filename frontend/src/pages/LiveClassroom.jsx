@@ -846,40 +846,7 @@ const LiveClassroom = ({ setCurrentPage }) => {
                 <span>Store Session Records</span>
               </label>
 
-              {endModalData.store && (
-                <div className="grid grid-cols-3 gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Year</label>
-                    <select
-                      value={endModalData.year}
-                      onChange={(e) => setEndModalData({ ...endModalData, year: e.target.value })}
-                      className="w-full bg-white border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
-                    >
-                      {[1, 2, 3, 4].map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Semester</label>
-                    <select
-                      value={endModalData.semester}
-                      onChange={(e) => setEndModalData({ ...endModalData, semester: e.target.value })}
-                      className="w-full bg-white border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
-                    >
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Section</label>
-                    <select
-                      value={endModalData.section}
-                      onChange={(e) => setEndModalData({ ...endModalData, section: e.target.value })}
-                      className="w-full bg-white border border-gray-300 rounded px-2 py-1.5 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
-                    >
-                      {['A', 'B', 'C', 'D'].map(sec => <option key={sec} value={sec}>{sec}</option>)}
-                    </select>
-                  </div>
-                </div>
-              )}
+
             </div>
             
             <div className="flex justify-end space-x-3">
@@ -892,12 +859,9 @@ const LiveClassroom = ({ setCurrentPage }) => {
               <button
                 onClick={() => {
                   startLiveClassroomSession(
-                    activeClassroom.code, 
-                    false, 
-                    endModalData.store, 
-                    endModalData.year, 
-                    endModalData.semester, 
-                    endModalData.section
+                    activeClassroom.code,
+                    false,
+                    endModalData.store
                   );
                   leaveClassroom();
                   setShowEndModal(false);

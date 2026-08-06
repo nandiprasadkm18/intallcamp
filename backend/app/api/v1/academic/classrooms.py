@@ -122,9 +122,13 @@ class LiveUpdateStatus(BaseModel):
     section: Optional[str] = None
 
 def process_end_of_class(db: Session, classroom_code: str, year: Optional[int] = None, semester: Optional[int] = None, section: Optional[str] = None):
-    # Retrieve all transcripts for this classroom in the past X hours to form context
-    # Since we use mock classrooms, we will just grab the latest transcripts
-    transcripts = db.query(TranscriptRecord).order_by(TranscriptRecord.id.desc()).limit(100).all()
+    from app.models.academic import Course
+    classroom = db.query(Classroom).join(Course).filter(Course.code == classroom_code).first()
+    
+    if not classroom:
+        return
+        
+    transcripts = db.query(TranscriptRecord).filter(TranscriptRecord.classroom_id == classroom.id).order_by(TranscriptRecord.id.desc()).limit(100).all()
     transcripts.reverse()
     transcript_text = "\n".join([f"{t.speaker_name}: {t.text}" for t in transcripts])
     
@@ -172,19 +176,28 @@ def process_end_of_class(db: Session, classroom_code: str, year: Optional[int] =
         from app.services.ai_pipeline import process_summary_background
         from app.services.storage import upload_file_to_r2
         import io
-        
-        classroom = db.query(Classroom).join(Course).filter(Course.code == classroom_code).first()
+        import time
+        import datetime
+
         if classroom:
             timestamp_str = str(int(time.time()))
             transcript_key = f"transcripts/{classroom_code}_{timestamp_str}.txt"
             summary_key = f"summaries/{classroom_code}_{timestamp_str}.md"
-            
+
             try:
                 upload_file_to_r2(io.BytesIO(transcript_text.encode('utf-8')), transcript_key)
                 upload_file_to_r2(io.BytesIO(summary.encode('utf-8')), summary_key)
             except Exception as e:
                 print(f"Failed to upload to R2: {e}")
-                
+
+            import re
+            if not semester or not section:
+                match = re.search(r"(\d+)(?:st|nd|rd|th)?\s*Sem\s*([A-Z])?", classroom_code, re.IGNORECASE)
+                if match:
+                    if not semester: semester = int(match.group(1))
+                    if not section and match.group(2): section = match.group(2).upper()
+                    if not year and semester: year = (semester + 1) // 2
+
             new_summary = LectureSummary(
                 classroom_id=classroom.id,
                 summary_text="[Stored in Cloudflare R2]",
@@ -295,24 +308,23 @@ def delete_classroom(
     if not classroom:
         raise HTTPException(status_code=404, detail="Classroom not found")
         
-    # Manually delete related records to avoid FK constraint errors
+    # Manually unlink related records to preserve them
     from app.models.activity import LectureSummary
-    db.query(LectureSummary).filter(LectureSummary.classroom_id == classroom.id).delete()
+    db.query(LectureSummary).filter(LectureSummary.classroom_id == classroom.id).update({LectureSummary.classroom_id: None})
     
     try:
         from database import Timetable, Resource
         db.query(Timetable).filter(Timetable.classroom_id == classroom.id).update({Timetable.classroom_id: None})
-        db.query(Resource).filter(Resource.classroom_id == classroom.id).delete()
+        db.query(Resource).filter(Resource.classroom_id == classroom.id).update({Resource.classroom_id: None})
     except ImportError:
         pass
 
-    db.query(Doubt).filter(Doubt.classroom_id == classroom.id).delete()
-    db.query(TranscriptRecord).filter(TranscriptRecord.classroom_id == classroom.id).delete()
+    db.query(Doubt).filter(Doubt.classroom_id == classroom.id).update({Doubt.classroom_id: None})
+    db.query(TranscriptRecord).filter(TranscriptRecord.classroom_id == classroom.id).update({TranscriptRecord.classroom_id: None})
     
     sessions = db.query(LectureSession).filter(LectureSession.classroom_id == classroom.id).all()
     for session in sessions:
-        db.query(Attendance).filter(Attendance.lecture_id == session.id).delete()
-        db.delete(session)
+        session.classroom_id = None
         
     db.delete(classroom)
     db.commit()

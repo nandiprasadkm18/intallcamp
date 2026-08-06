@@ -45,7 +45,7 @@ class Classroom(Base):
 
 class LectureSession(Base):
     __tablename__ = "lecture_sessions"
-    classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=False)
+    classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=True)
     start_time = Column(String, nullable=False)
     end_time = Column(String, nullable=True)
     ai_transcript_url = Column(String, nullable=True)
@@ -64,7 +64,7 @@ class Attendance(Base):
 
 class Doubt(Base):
     __tablename__ = "doubts"
-    classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=False)
+    classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=True)
     student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     question = Column(String, nullable=False)
     is_anonymous = Column(Integer, default=0)
@@ -76,7 +76,7 @@ class Doubt(Base):
 
 class TranscriptRecord(Base):
     __tablename__ = "transcript_records"
-    classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=False)
+    classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=True)
     text = Column(String, nullable=False)
     speaker_name = Column(String, nullable=True) # Usually the teacher
     timestamp = Column(String, nullable=False)
@@ -86,7 +86,7 @@ class TranscriptRecord(Base):
 class LectureSummary(Base):
     __tablename__ = "lecture_summaries"
     id = Column(Integer, primary_key=True, index=True)
-    classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=False)
+    classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=True)
     summary_text = Column(String, nullable=False)
     created_at = Column(String, nullable=False)
     transcript_s3_key = Column(String, nullable=True)

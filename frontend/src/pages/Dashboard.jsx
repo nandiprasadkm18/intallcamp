@@ -58,6 +58,7 @@ const Dashboard = () => {
   const [classrooms, setClassrooms] = useState([]);
   const [newRoomName, setNewRoomName] = useState("");
   const [newRoomSection, setNewRoomSection] = useState("7th Sem A");
+  const [newRoomYear, setNewRoomYear] = useState("4");
   const [joinCode, setJoinCode] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -364,7 +365,7 @@ const Dashboard = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({ name: newRoomName, code: newRoomSection }),
+        body: JSON.stringify({ name: newRoomName, code: newRoomSection, year: parseInt(newRoomYear) }),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -373,6 +374,7 @@ const Dashboard = () => {
       setSuccess(`Room ${data.code} successfully created!`);
       setNewRoomName("");
       setNewRoomSection("7th Sem A");
+      setNewRoomYear("4");
       loadRooms();
     } catch (err) {
       setError(err.message);
@@ -382,7 +384,7 @@ const Dashboard = () => {
   const handleDeleteClassroom = async (code) => {
     setError("");
     setSuccess("");
-    if (!window.confirm(`Are you sure you want to delete classroom ${code}? This will remove all related doubts, resources, transcripts, and timetables.`)) {
+    if (!window.confirm(`Are you sure you want to end this live classroom session (${code})? Related resources, transcripts, and timetables will be preserved.`)) {
       return;
     }
     try {
@@ -819,6 +821,20 @@ const Dashboard = () => {
                     className="w-full bg-white border border-gray-200 rounded pl-3 pr-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
                     placeholder="e.g. Computer Networks"
                   />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Target Year</label>
+                  <select
+                    required
+                    value={newRoomYear}
+                    onChange={(e) => setNewRoomYear(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="1">1st Year</option>
+                    <option value="2">2nd Year</option>
+                    <option value="3">3rd Year</option>
+                    <option value="4">4th Year</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-[10px] font-semibold uppercase tracking-wider text-gray-500 mb-1.5">Target Section</label>
