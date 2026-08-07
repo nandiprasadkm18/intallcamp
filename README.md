@@ -15,7 +15,7 @@
 ---
 
 ## 🚀 Overview
-**Intellcamp** is a cutting-edge web application blending a lightning-fast React frontend with a robust FastAPI backend. Designed to revolutionize the modern classroom, it leverages the power of AI (via Groq), WebSockets for real-time collaboration, and scalable cloud storage to deliver a seamless learning experience for students, teachers, and enterprise administrators.
+**Intellcamp** is a cutting-edge web application blending a lightning-fast React frontend with a robust FastAPI backend. Designed to revolutionize the modern classroom. AI (via Groq), WebSockets for real-time collaboration, and scalable cloud storage to deliver a seamless learning experience for students, teachers, and enterprise administrators.
 
 ---
 
