@@ -60,7 +60,7 @@ const LiveClassroom = ({ setCurrentPage }) => {
 
     setIsGenerating(prev => ({ ...prev, [doubtId]: true }));
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${activeClassroom.code}/doubts/${doubtId}/answer`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms/${activeClassroom.code}/doubts/${doubtId}/answer`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -150,7 +150,7 @@ const LiveClassroom = ({ setCurrentPage }) => {
     try {
       setChatResponses(prev => [...prev, { role: 'assistant', text: '' }]);
       
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${activeClassroom.code}/chat`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms/${activeClassroom.code}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -237,7 +237,7 @@ const LiveClassroom = ({ setCurrentPage }) => {
     setCompilerError(false);
     setAiFixExplanation("");
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/v1/ai/compiler/execute", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/ai/compiler/execute`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ language: selectedLang, code: localCode })
@@ -261,7 +261,7 @@ const LiveClassroom = ({ setCurrentPage }) => {
   const handleAiFix = async () => {
     setIsFixing(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/v1/ai/compiler/fix", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/ai/compiler/fix`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ language: selectedLang, code: localCode, error: compilerOutput, model: simLLM })

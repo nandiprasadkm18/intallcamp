@@ -37,7 +37,7 @@ export const ClassroomProvider = ({ children }) => {
   const fetchClassroomDetails = async (code) => {
     try {
       // 1. Fetch main info
-      const resMain = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms`, {
+      const resMain = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (!resMain.ok) throw new Error("Classroom room not found");
@@ -49,7 +49,7 @@ export const ClassroomProvider = ({ children }) => {
       setActiveClassroom(mainInfo);
 
       // 2. Fetch transcript log
-      const resTrans = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${code}/records`, {
+      const resTrans = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms/${code}/records`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (resTrans.ok) {
@@ -58,7 +58,7 @@ export const ClassroomProvider = ({ children }) => {
       }
 
       // 3. Fetch doubt board log
-      const resDoubts = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${code}/doubts`, {
+      const resDoubts = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms/${code}/doubts`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (resDoubts.ok) {
@@ -67,7 +67,7 @@ export const ClassroomProvider = ({ children }) => {
       }
 
       // 4. Fetch subject resources
-      const resRes = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${code}/resources`, {
+      const resRes = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms/${code}/resources`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (resRes.ok) {
@@ -76,7 +76,7 @@ export const ClassroomProvider = ({ children }) => {
       }
       
       // 5. Fetch Attendance
-      const resAtt = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${code}/attendance`, {
+      const resAtt = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms/${code}/attendance`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (resAtt.ok) {
@@ -94,7 +94,7 @@ export const ClassroomProvider = ({ children }) => {
       ws.current.close();
     }
 
-    const socketUrl = `ws://127.0.0.1:8000/ws/classroom/${roomCode.toUpperCase()}?user_name=${encodeURIComponent(user?.full_name || "Anonymous")}&user_id=${encodeURIComponent(user?.id || "")}`;
+    const socketUrl = `${import.meta.env.VITE_WS_URL}/ws/classroom/${roomCode.toUpperCase()}?user_name=${encodeURIComponent(user?.full_name || "Anonymous")}&user_id=${encodeURIComponent(user?.id || "")}`;
     const socket = new WebSocket(socketUrl);
     ws.current = socket;
 
@@ -222,7 +222,7 @@ export const ClassroomProvider = ({ children }) => {
   // Actions broadcasted to server over WebSocket
   const startLiveClassroomSession = async (code, isLive, storeRecord = false, year = null, semester = null, section = null) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${code}/live`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms/${code}/live`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -299,7 +299,7 @@ export const ClassroomProvider = ({ children }) => {
 
   const fetchGlobalResources = async () => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/GLOBAL/resources`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms/GLOBAL/resources`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -329,7 +329,7 @@ export const ClassroomProvider = ({ children }) => {
         formData.append("target_section", targetFilters.section);
       }
 
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${targetCode}/resources`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms/${targetCode}/resources`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -348,7 +348,7 @@ export const ClassroomProvider = ({ children }) => {
 
   const downloadResource = async (id, title, fileType) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${id}/download`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms/${id}/download`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -376,7 +376,7 @@ export const ClassroomProvider = ({ children }) => {
 
   const deleteResource = async (id) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/resources/${id}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms/resources/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -395,12 +395,12 @@ export const ClassroomProvider = ({ children }) => {
   const simulateAttendance = async () => {
     if (!activeClassroom) return;
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${activeClassroom.code}/attendance/simulate`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms/${activeClassroom.code}/attendance/simulate`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (response.ok) {
-        const resAtt = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${activeClassroom.code}/attendance`);
+        const resAtt = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms/${activeClassroom.code}/attendance`);
         if (resAtt.ok) {
           const attData = await resAtt.json();
           setAttendance(attData);

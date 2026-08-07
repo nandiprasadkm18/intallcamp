@@ -48,7 +48,7 @@ const SuperAdminColleges = () => {
 
   const fetchColleges = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/v1/tenant/colleges', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/tenant/colleges`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (res.ok) {
@@ -75,7 +75,7 @@ const SuperAdminColleges = () => {
     setSuccess("");
     setLoading(true);
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/v1/tenant/colleges', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/tenant/colleges`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

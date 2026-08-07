@@ -21,7 +21,7 @@ export interface Activity {
 export const platformService = {
   async getKPIs(): Promise<PlatformKPIs> {
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/v1/tenant/colleges/kpis', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/tenant/colleges/kpis`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (res.ok) {

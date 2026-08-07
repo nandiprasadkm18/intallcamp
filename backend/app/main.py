@@ -13,7 +13,13 @@ app = FastAPI(
 # Set all CORS enabled origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, restrict this
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://intallcamp.vercel.app"
+    ], # Specific origins are required when allow_credentials=True
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

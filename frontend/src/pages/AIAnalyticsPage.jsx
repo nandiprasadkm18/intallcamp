@@ -32,7 +32,7 @@ const AIAnalyticsPage = () => {
     const fetchAnalytics = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch('http://127.0.0.1:8000/api/v1/tenant/analytics/ai', {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/tenant/analytics/ai`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (!res.ok) throw new Error("Failed to load analytics");

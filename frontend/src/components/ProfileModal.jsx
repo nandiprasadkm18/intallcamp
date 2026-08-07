@@ -20,7 +20,7 @@ const ProfileModal = ({ isOpen, onClose, user, onUpdate }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/api/v1/users/profile', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/users/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

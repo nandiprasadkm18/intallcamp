@@ -21,7 +21,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const fetchUserProfile = async (authToken) => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/v1/auth/me', {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/auth/me`, {
           headers: {
             'Authorization': `Bearer ${authToken}`
           }
@@ -60,7 +60,7 @@ export const AuthProvider = ({ children }) => {
       formData.append('username', email);
       formData.append('password', password);
 
-      const response = await fetch('http://127.0.0.1:8000/api/v1/auth/login', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -88,7 +88,7 @@ export const AuthProvider = ({ children }) => {
         'teacher': 'Teacher'
       };
       
-      const response = await fetch('http://127.0.0.1:8000/api/v1/users/register', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/users/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

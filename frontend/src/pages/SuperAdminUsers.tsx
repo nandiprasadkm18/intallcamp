@@ -33,7 +33,7 @@ const SuperAdminUsers = () => {
     const fetchColleges = async () => {
       setLoading(true);
       try {
-        const res = await fetch('http://127.0.0.1:8000/api/v1/tenant/colleges', {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/tenant/colleges`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         if (res.ok) {
@@ -58,7 +58,7 @@ const SuperAdminUsers = () => {
     const fetchUsers = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/v1/users/college/${selectedCollege.id}`, {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/users/college/${selectedCollege.id}`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         if (res.ok) {

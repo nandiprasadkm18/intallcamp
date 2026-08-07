@@ -17,7 +17,7 @@ const RecordsPage = () => {
     // For this demo, we'll fetch the records of the first class directly
     const loadRecords = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/v1/academic/classrooms/my_records', {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms/my_records`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         });
         if (response.ok) {
@@ -43,7 +43,7 @@ const RecordsPage = () => {
       
       try {
         if (selectedRecord.transcript_key) {
-          const res = await fetch(`http://127.0.0.1:8000/api/v1/academic/records/download?key=${selectedRecord.transcript_key}`, {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/records/download?key=${selectedRecord.transcript_key}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
           });
           if (res.ok) {
@@ -52,7 +52,7 @@ const RecordsPage = () => {
         }
         
         if (selectedRecord.summary_key) {
-          const res = await fetch(`http://127.0.0.1:8000/api/v1/academic/records/download?key=${selectedRecord.summary_key}`, {
+          const res = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/records/download?key=${selectedRecord.summary_key}`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
           });
           if (res.ok) {

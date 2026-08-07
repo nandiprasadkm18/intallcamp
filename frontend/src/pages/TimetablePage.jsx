@@ -24,8 +24,8 @@ const TimetablePage = () => {
   const loadTimetables = async () => {
     try {
       const url = user?.section 
-        ? `http://127.0.0.1:8000/api/admin/timetables?section=${encodeURIComponent(user.section)}` 
-        : 'http://127.0.0.1:8000/api/admin/timetables';
+        ? `${import.meta.env.VITE_API_URL}/api/admin/timetables?section=${encodeURIComponent(user.section)}` 
+        : `${import.meta.env.VITE_API_URL}/api/admin/timetables`;
       const res = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${user.token || localStorage.getItem('token')}`

@@ -212,7 +212,7 @@ const Dashboard = () => {
 
   const loadRooms = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/academic/classrooms', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (response.ok) {
@@ -228,17 +228,17 @@ const Dashboard = () => {
     if (user?.role !== 'College Admin') return;
     try {
       // System metrics (Note: may not exist in v1, handled gracefully if 404)
-      const resMetrics = await fetch('http://127.0.0.1:8000/api/admin/system/metrics', {
+      const resMetrics = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/system/metrics`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (resMetrics.ok) setAdminMetrics(await resMetrics.json());
 
-      const resUsers = await fetch(`http://127.0.0.1:8000/api/v1/users/college/${user.college_id}`, {
+      const resUsers = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/users/college/${user.college_id}`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (resUsers.ok) setAdminUsers(await resUsers.json());
 
-      const resDepts = await fetch('http://127.0.0.1:8000/api/v1/tenant/departments', {
+      const resDepts = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/tenant/departments`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (resDepts.ok) setDepartments(await resDepts.json());
@@ -249,7 +249,7 @@ const Dashboard = () => {
 
   const loadTimetables = async () => {
     try {
-      let url = 'http://127.0.0.1:8000/api/admin/timetables';
+      let url = `${import.meta.env.VITE_API_URL}/api/admin/timetables`;
       if (user?.role === 'College Admin') {
         url += `?year=${ttFilterYear}&semester=${ttFilterSem}&department=${ttFilterDept}&section=${ttFilterSection}`;
       } else if (user?.year && user?.semester && user?.department) {
@@ -274,7 +274,7 @@ const Dashboard = () => {
 
   const loadAnnouncements = async () => {
     try {
-      const resAnn = await fetch('http://127.0.0.1:8000/api/announcements');
+      const resAnn = await fetch(`${import.meta.env.VITE_API_URL}/api/announcements`);
       if (resAnn.ok) setAnnouncements(await resAnn.json());
     } catch (e) {
       console.error(e);
@@ -284,7 +284,7 @@ const Dashboard = () => {
   const loadStudentMetrics = async () => {
     if (user?.role !== 'Student') return;
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/student/dashboard/metrics', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/student/dashboard/metrics`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (response.ok) {
@@ -298,7 +298,7 @@ const Dashboard = () => {
   const loadTeacherMetrics = async () => {
     if (user?.role !== 'Teacher' && user?.role !== 'College Admin') return;
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/teacher/dashboard/metrics', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/teacher/dashboard/metrics`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (response.ok) {
@@ -313,8 +313,8 @@ const Dashboard = () => {
     if (user?.role !== 'Student' && user?.role !== 'Teacher' && user?.role !== 'College Admin') return;
     try {
       const endpoint = user?.role === 'Student'
-        ? 'http://127.0.0.1:8000/api/student/dashboard/chart'
-        : 'http://127.0.0.1:8000/api/teacher/dashboard/chart';
+        ? `${import.meta.env.VITE_API_URL}/api/student/dashboard/chart`
+        : `${import.meta.env.VITE_API_URL}/api/teacher/dashboard/chart`;
 
       const response = await fetch(endpoint, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
@@ -359,7 +359,7 @@ const Dashboard = () => {
       return;
     }
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/academic/classrooms', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -388,7 +388,7 @@ const Dashboard = () => {
       return;
     }
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/academic/classrooms/${code}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms/${code}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -409,7 +409,7 @@ const Dashboard = () => {
   const handleUpdateTimetable = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/admin/timetables/${editingTimetableSlot.id}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/timetables/${editingTimetableSlot.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -435,7 +435,7 @@ const Dashboard = () => {
   const handleDeleteTimetable = async (id) => {
     if (!window.confirm("Are you sure you want to delete this class slot?")) return;
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/admin/timetables/${id}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/timetables/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -467,7 +467,7 @@ const Dashboard = () => {
         "admin": "College Admin"
       };
       
-      const response = await fetch('http://127.0.0.1:8000/api/v1/users/register', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/users/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -503,7 +503,7 @@ const Dashboard = () => {
     setSuccess("");
     if (!window.confirm("Are you sure you want to delete this user?")) return;
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/users/${id}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/users/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -529,7 +529,7 @@ const Dashboard = () => {
       return;
     }
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/admin/departments', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/departments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -559,7 +559,7 @@ const Dashboard = () => {
       return;
     }
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/admin/classrooms/${mapRoomId}/assign`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/classrooms/${mapRoomId}/assign`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -595,7 +595,7 @@ const Dashboard = () => {
         if (existingRoom) {
           resolvedRoomId = existingRoom.id;
         } else {
-          const resRoom = await fetch('http://127.0.0.1:8000/api/v1/academic/classrooms', {
+          const resRoom = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/academic/classrooms`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -610,7 +610,7 @@ const Dashboard = () => {
         }
       }
 
-      const response = await fetch('http://127.0.0.1:8000/api/admin/timetables', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/timetables`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -650,7 +650,7 @@ const Dashboard = () => {
       return;
     }
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/announcements', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/announcements`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
